@@ -9,8 +9,9 @@ export async function stageUploadWithSupabaseFunction(
 ): Promise<SupabaseStagedUpload | null> {
   const enabled = import.meta.env.VITE_USE_SUPABASE_UPLOAD_FUNCTION === "true";
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  if (!enabled || !supabaseUrl || !anonKey) return null;
+  const publishableKey =
+    import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if (!enabled || !supabaseUrl || !publishableKey) return null;
 
   const form = new FormData();
   form.append("file", file);
@@ -20,8 +21,8 @@ export async function stageUploadWithSupabaseFunction(
   const response = await fetch(`${String(supabaseUrl).replace(/\/$/, "")}/functions/v1/upload-file`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${anonKey}`,
-      apikey: anonKey,
+      Authorization: `Bearer ${publishableKey}`,
+      apikey: publishableKey,
     },
     body: form,
   });

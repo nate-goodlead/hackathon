@@ -17,6 +17,14 @@ function env(name: string) {
   return value;
 }
 
+function firstEnv(...names: string[]) {
+  for (const name of names) {
+    const value = Deno.env.get(name);
+    if (value) return value;
+  }
+  throw new Error(`${names.join(" or ")} is not configured`);
+}
+
 function safeFilename(name: string) {
   return name.replace(/[^\w.\-() ]+/g, "_").slice(0, 160) || "upload.bin";
 }
@@ -31,7 +39,7 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = env("SUPABASE_URL").replace(/\/$/, "");
-    const serviceRoleKey = env("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceRoleKey = firstEnv("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY");
     const bucket = Deno.env.get("SUPABASE_STORAGE_BUCKET") || "uploads";
 
     const form = await req.formData();

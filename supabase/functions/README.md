@@ -18,7 +18,7 @@ npx supabase functions deploy upload-file
 Required function secrets:
 
 ```bash
-npx supabase secrets set SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... SUPABASE_STORAGE_BUCKET=uploads
+npx supabase secrets set SUPABASE_URL=... SUPABASE_SECRET_KEY=... SUPABASE_STORAGE_BUCKET=uploads
 ```
 
 Frontend opt-in:
@@ -26,5 +26,5 @@ Frontend opt-in:
 ```bash
 VITE_USE_SUPABASE_UPLOAD_FUNCTION=true
 VITE_SUPABASE_URL=https://<project-ref>.supabase.co
-VITE_SUPABASE_ANON_KEY=<anon-key>
+VITE_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
 ```
