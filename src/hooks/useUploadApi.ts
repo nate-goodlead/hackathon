@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { UploadAnalysis, UnifiedStats } from "../types/upload";
+import { stageUploadWithSupabaseFunction } from "../lib/supabaseUploadFunction";
 
 type ConfirmUploadResult = {
   rowsAdded: number;
@@ -45,6 +46,17 @@ export function useUploadApi() {
     form.append("use_ai", String(opts.useAi ?? true));
 
     try {
+      const staged = await stageUploadWithSupabaseFunction(file, {
+        opcoId: opts.opcoId,
+        sourceSystem: opts.sourceSystem,
+      }).catch((e) => {
+        console.warn("Supabase upload function unavailable; falling back to local upload API.", e);
+        return null;
+      });
+      if (staged) {
+        form.append("supabase_upload_id", staged.uploadId);
+        form.append("supabase_storage_path", staged.storagePath);
+      }
       const r = await fetch("/api/upload/analyze", { method: "POST", body: form });
       const text = await r.text();
       let data: UploadAnalysis & { detail?: string };

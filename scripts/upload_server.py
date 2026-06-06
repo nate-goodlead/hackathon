@@ -208,6 +208,8 @@ async def upload_analyze(
     city: str = Form(""),
     source_system: str = Form(""),
     use_ai: bool = Form(True),
+    supabase_upload_id: str = Form(""),
+    supabase_storage_path: str = Form(""),
 ):
     if not file.filename:
         raise HTTPException(400, "No file provided")
@@ -224,7 +226,7 @@ async def upload_analyze(
     if len(content) > 25 * 1024 * 1024:
         raise HTTPException(400, "File too large (max 25MB)")
 
-    upload_id = str(uuid.uuid4())[:8]
+    upload_id = supabase_upload_id.strip() or str(uuid.uuid4())[:8]
     folder = _upload_dir(upload_id)
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -335,8 +337,10 @@ async def upload_analyze(
         "sheetsBreakdown": sheets_breakdown,
     })
 
-    storage_key = None
-    if is_xlsx:
+    storage_key = supabase_storage_path.strip() or None
+    if storage_key:
+        data.setdefault("warnings", []).append("Original file staged through Supabase Edge Function + Storage.")
+    elif is_xlsx:
         storage_key = upload_file_to_storage(folder / "original.xlsx", f"{upload_id}/original.xlsx")
     else:
         storage_key = upload_file_to_storage(folder / "original.csv", f"{upload_id}/original.csv")
