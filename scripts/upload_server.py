@@ -409,8 +409,11 @@ async def confirm_upload(upload_id: str, body: dict):
                 gl_map[normalized_gl] = sug["suggestedCategory"]
 
     routing = analysis.get("storeRouting") or analysis.get("duplicateCheck", {}).get("storeRouting") or {}
-    added, added_by_store = insert_transactions(normalized, opco_id, gl_map, upload_batch_id=None)
-    upsert_gl_mappings(gl_map, opco_id)
+    try:
+        added, added_by_store = insert_transactions(normalized, opco_id, gl_map, upload_batch_id=None)
+        upsert_gl_mappings(gl_map, opco_id)
+    except Exception as e:
+        raise HTTPException(500, f"Database merge failed: {e}") from e
 
     if added == 0:
         raise HTTPException(

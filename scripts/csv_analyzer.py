@@ -241,6 +241,29 @@ def _row_text(row: dict[str, str]) -> str:
     return " ".join(str(v) for v in row.values()).lower()
 
 
+def _looks_like_journal_column(column: str | None) -> bool:
+    return bool(column and re.match(r"^(dagboek|journal|boek|boekstuk|bkst)", column.strip(), re.I))
+
+
+def _looks_like_tax_column(column: str | None) -> bool:
+    return bool(column and re.search(r"\b(btw|vat|tax)\b", column.strip(), re.I))
+
+
+def _has_real_gl_values(rows: list[dict[str, str]], column: str | None) -> bool:
+    if not column:
+        return False
+    checked = 0
+    hits = 0
+    for row in rows[:200]:
+        value = row.get(column, "").strip()
+        if not value:
+            continue
+        checked += 1
+        if normalize_gl_account(value):
+            hits += 1
+    return checked > 0 and hits / checked >= 0.5
+
+
 def _apply_field_gaps(defaults: dict[str, str], field_gaps: list[dict] | None) -> None:
     if not field_gaps:
         return
@@ -487,6 +510,12 @@ def analyze_csv(
             if col and field in ColumnMapping.__dataclass_fields__:
                 setattr(mapping, field, col)
                 col_conf[field] = max(col_conf.get(field, 0), float(spec.get("confidence", 0.88)))
+    if _looks_like_journal_column(mapping.gl_account) and not _has_real_gl_values(all_rows, mapping.gl_account):
+        mapping.gl_account = None
+        col_conf["gl_account"] = 0.0
+    if _looks_like_tax_column(mapping.amount) and (mapping.debit or mapping.credit):
+        mapping.amount = None
+        col_conf["amount"] = 0.0
 
     detected_system, sys_conf = detect_system(headers, sample_rows)
     if ai_enhancement and ai_enhancement.get("detected_system"):

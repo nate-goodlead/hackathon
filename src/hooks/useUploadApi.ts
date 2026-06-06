@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import type { UploadAnalysis, UnifiedStats } from "../types/upload";
 
+type ConfirmUploadResult = {
+  rowsAdded: number;
+  totalRows: number;
+  rowsAddedByStore?: Record<string, number>;
+};
+
 export function useUploadApi() {
   const [aiAvailable, setAiAvailable] = useState(false);
   const [stats, setStats] = useState<UnifiedStats | null>(null);
@@ -40,7 +46,15 @@ export function useUploadApi() {
 
     try {
       const r = await fetch("/api/upload/analyze", { method: "POST", body: form });
-      const data = await r.json();
+      const text = await r.text();
+      let data: UploadAnalysis & { detail?: string };
+      try {
+        data = JSON.parse(text) as UploadAnalysis & { detail?: string };
+      } catch {
+        throw new Error(
+          r.ok ? "Invalid response from upload API" : text.slice(0, 120) || `Upload failed (${r.status})`,
+        );
+      }
       if (!r.ok) throw new Error(data.detail ?? "Upload failed");
       return data as UploadAnalysis;
     } catch (e) {
@@ -62,7 +76,7 @@ export function useUploadApi() {
       city?: string;
       sourceSystem?: string;
     },
-  ) {
+  ): Promise<ConfirmUploadResult> {
     setLoading(true);
     setError(null);
     const glApprovals: Record<string, string> = {};
@@ -84,7 +98,15 @@ export function useUploadApi() {
           sourceSystem: payload.sourceSystem,
         }),
       });
-      const data = await r.json();
+      const text = await r.text();
+      let data: { detail?: string | { msg?: string }[] } & Record<string, unknown>;
+      try {
+        data = JSON.parse(text) as { detail?: string | { msg?: string }[] } & Record<string, unknown>;
+      } catch {
+        throw new Error(
+          r.ok ? "Invalid response from upload API" : text.slice(0, 160) || `Confirm failed (${r.status})`,
+        );
+      }
       if (!r.ok) {
         const detail =
           typeof data.detail === "string"
@@ -95,7 +117,7 @@ export function useUploadApi() {
         throw new Error(detail || "Confirm failed");
       }
       await refreshStats();
-      return data;
+      return data as ConfirmUploadResult;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Confirm failed";
       setError(msg);
