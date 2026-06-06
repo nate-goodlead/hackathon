@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AgentPanel } from "./agent/AgentPanel";
 import L from "leaflet";
 import {
   Bar,
@@ -668,6 +669,12 @@ export default function App() {
           ; production path can add KNMI open data attribution.
         </span>
       </footer>
+
+      <AgentPanel
+        model={model}
+        onSetScenario={setScenario}
+        onRefreshWeather={fetchLiveWeather}
+      />
     </main>
   );
 }
