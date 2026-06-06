@@ -278,11 +278,11 @@ def normalize_row(
         gl_col = mapping.gl_account
         gl = normalize_gl_account(_cell(row, gl_col) if gl_col else "")
         inferred_sales_journal = False
-        if not gl and mapping.credit and _cell(row, mapping.credit):
+        if not gl and (mapping.credit or mapping.amount):
             text = _row_text(row)
             if "verkoop" in text or "omzet" in text:
                 gl = "8000"
-                inferred_sales_journal = True
+                inferred_sales_journal = bool(mapping.credit and _cell(row, mapping.credit))
         if not gl:
             return None
 
@@ -329,7 +329,7 @@ def build_gl_suggestions(rows: list[dict], gl_map: dict[str, str]) -> list[GlSug
     seen: set[str] = set()
     suggestions: list[GlSuggestion] = []
     for row in rows:
-        gl = str(row.get("gl_account", "")).strip()
+        gl = normalize_gl_account(row.get("gl_account", ""))
         if not gl or gl in seen:
             continue
         seen.add(gl)

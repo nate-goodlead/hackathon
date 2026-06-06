@@ -8,7 +8,7 @@ from typing import Any
 
 from csv_analyzer import detect_columns, detect_system
 from data_stores import DATA_STORES
-from unified_schema import UNIFIED_HEADERS, GL_CATEGORIES, parse_date
+from unified_schema import GL_CATEGORIES, UNIFIED_HEADERS, normalize_gl_account, parse_date
 
 
 def _stratified_samples(rows: list[dict], per_section: int = 6) -> dict[str, list[dict]]:
@@ -68,7 +68,9 @@ def build_file_profile(
                 skipped_date += 1
 
         if gl_col and row.get(gl_col, "").strip():
-            gl_counter[str(row[gl_col]).strip()] += 1
+            gl = normalize_gl_account(row[gl_col])
+            if gl:
+                gl_counter[gl] += 1
 
         if amount_col and row.get(amount_col, "").strip():
             val = _parse_amount(row[amount_col])

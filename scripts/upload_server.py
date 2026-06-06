@@ -42,7 +42,13 @@ from db import (
     upsert_gl_mappings,
 )
 from load_env import load_env
-from unified_schema import UPLOADS, merge_rows_routed, save_upload_meta, write_stores_and_master
+from unified_schema import (
+    UPLOADS,
+    merge_rows_routed,
+    normalize_gl_account,
+    save_upload_meta,
+    write_stores_and_master,
+)
 from xlsx_reader import save_xlsx_as_csv
 
 load_env()
@@ -392,12 +398,15 @@ async def confirm_upload(upload_id: str, body: dict):
     gl_map = load_gl_mappings()
     approved = body.get("glApprovals", {})
     for gl, cat in approved.items():
-        if cat and cat != "unmapped":
-            gl_map[gl] = cat
+        normalized_gl = normalize_gl_account(gl)
+        if normalized_gl and cat and cat != "unmapped":
+            gl_map[normalized_gl] = cat
 
     for sug in body.get("glSuggestions", analysis.get("glSuggestions", [])):
         if sug.get("status") == "approved" and sug.get("suggestedCategory") != "unmapped":
-            gl_map[sug["glAccount"]] = sug["suggestedCategory"]
+            normalized_gl = normalize_gl_account(sug.get("glAccount"))
+            if normalized_gl:
+                gl_map[normalized_gl] = sug["suggestedCategory"]
 
     routing = analysis.get("storeRouting") or analysis.get("duplicateCheck", {}).get("storeRouting") or {}
     added, added_by_store = insert_transactions(normalized, opco_id, gl_map, upload_batch_id=None)

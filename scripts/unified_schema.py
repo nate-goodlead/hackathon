@@ -65,7 +65,7 @@ def normalize_gl_account(value) -> str:
         return ""
     if re.fullmatch(r"\d+\.0+", text):
         text = text.split(".")[0]
-    match = re.search(r"\d{3,6}", text)
+    match = re.search(r"\d{4,6}", text)
     return match.group(0) if match else ""
 
 
