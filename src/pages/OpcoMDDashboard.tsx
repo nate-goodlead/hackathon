@@ -18,7 +18,7 @@ export function OpcoMDDashboard({ projects, weatherInsights }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="dashboard-card flex flex-wrap divide-x divide-border overflow-hidden">
+      <div className="dashboard-card flex flex-wrap divide-x divide-border-strong overflow-hidden">
         <KpiCard label="Total WIP exposure" value={formatEuro(totalWip)} />
         <KpiCard
           label="Projects at risk"

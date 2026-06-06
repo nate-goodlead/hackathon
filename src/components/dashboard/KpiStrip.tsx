@@ -35,7 +35,7 @@ interface KpiStripProps {
 
 export function KpiStrip({ netCash13w, headroom, atRiskCount, wetVsBaseDelta }: KpiStripProps) {
   return (
-    <div className="dashboard-card mb-6 flex flex-wrap divide-x divide-border overflow-hidden animate-fade-up stagger-1">
+    <div className="dashboard-card mb-6 flex flex-wrap divide-x divide-border-strong overflow-hidden animate-fade-up stagger-1">
       <div className="flex w-full flex-wrap lg:flex-nowrap">
         <KpiMetric label="13-week net cash" value={formatEuro(netCash13w)} />
         <KpiMetric

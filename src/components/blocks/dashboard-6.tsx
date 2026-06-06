@@ -168,7 +168,7 @@ export function Dashboard6({
 
       {/* KPI strip */}
       <Card className="py-0 ring-1 ring-border/60">
-        <CardContent className="flex flex-wrap divide-x divide-border p-0">
+        <CardContent className="flex flex-wrap divide-x divide-border-strong p-0">
           <KpiCell label="13-week net cash" value={formatEuro(netTotal)} delta={netDelta} />
           <KpiCell label="Covenant headroom" value={formatEuro(headroom)} delta={headroomDelta} />
           <KpiCell label="Projects at risk" value={String(atRisk.length)} delta={atRiskDelta} suffix="" />
@@ -436,7 +436,7 @@ function AttentionRow({ label, count }: { label: string; count?: number }) {
   return (
     <button
       type="button"
-      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-muted/50"
+      className="flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left text-sm transition last:border-b-0 hover:bg-muted/50"
     >
       <CloudRain className="size-4 shrink-0 text-muted-foreground" />
       <span className="flex-1">{label}</span>

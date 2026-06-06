@@ -170,7 +170,7 @@ export function DataUploadPage() {
 
       {stats && stats.totalRows > 0 && (
         <Card className="py-0 ring-1 ring-border/60">
-          <CardContent className="flex flex-wrap divide-x divide-border p-0">
+          <CardContent className="flex flex-wrap divide-x divide-border-strong p-0">
             <Stat label="Central database rows" value={stats.totalRows.toLocaleString()} />
             <Stat label="Systems" value={String(stats.systems.length)} />
             <Stat label="Opcos" value={String(stats.opcos.length)} />
