@@ -9,6 +9,7 @@ import os
 import subprocess
 import uuid
 from pathlib import Path
+from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -101,13 +102,14 @@ def api_list_opcos():
 
 @app.post("/api/opcos")
 async def api_create_opco(body: dict):
-    required = ["name", "city", "lat", "lng"]
-    for field in required:
-        if not body.get(field):
+    for field in ("name", "city", "region"):
+        if not str(body.get(field, "")).strip():
             raise HTTPException(400, f"{field} is required")
     try:
         opco = create_opco(body)
         return {"ok": True, "opco": opco}
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
     except RuntimeError as e:
         raise HTTPException(503, str(e)) from e
 
@@ -138,7 +140,7 @@ def api_data_forecast():
 
 
 @app.get("/api/data/traces")
-def api_data_traces(scenario: str | None = None):
+def api_data_traces(scenario: Optional[str] = None):
     return get_current_traces(scenario)
 
 
@@ -155,9 +157,14 @@ def api_data_covenant():
 @app.get("/api/data/weather-insights")
 def api_data_weather():
     insights = build_weather_insights()
-    if insights:
+    if insights and insights.get("cities"):
         return insights
-    raise HTTPException(404, "No weather data available")
+    try:
+        from fetch_weather import fetch_all_weather
+
+        return fetch_all_weather()
+    except Exception as exc:
+        raise HTTPException(404, f"No weather data available: {exc}") from exc
 
 
 @app.get("/api/data/portfolio")
@@ -198,6 +205,8 @@ async def upload_analyze(
 ):
     if not file.filename:
         raise HTTPException(400, "No file provided")
+    if Path(file.filename).name.startswith("~$"):
+        raise HTTPException(400, "Temporary Excel lock files are not supported — close Excel and upload the real workbook.")
 
     name = file.filename.lower()
     is_csv = name.endswith(".csv") or name.endswith(".txt")
@@ -214,13 +223,20 @@ async def upload_analyze(
     folder.mkdir(parents=True, exist_ok=True)
 
     sheet_name = None
+    sheet_names: list[str] = []
+    sheets_breakdown: list[dict] = []
     file_type = "csv"
     csv_bytes = content
 
     if is_xlsx:
         file_type = "xlsx"
         (folder / "original.xlsx").write_bytes(content)
-        headers, rows, sheet_name = save_xlsx_as_csv(content, folder / "converted.csv")
+        try:
+            headers, rows, sheet_name, sheet_names, sheets_breakdown = save_xlsx_as_csv(
+                content, folder / "converted.csv"
+            )
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
         csv_bytes = (folder / "converted.csv").read_bytes()
     else:
         (folder / "original.csv").write_bytes(content)
@@ -230,27 +246,46 @@ async def upload_analyze(
         "opco_id": opco_id.strip(),
         "opco": selected_opco["name"] if selected_opco else opco.strip(),
         "city": selected_opco["city"] if selected_opco and not city.strip() else city.strip(),
-        "source_system": (
-            selected_opco["sourceSystem"] if selected_opco and not source_system.strip() else source_system.strip()
-        ),
+        "source_system": source_system.strip(),
         "project_id": "PRJ-UNK-001",
     }
 
-    ai_enhancement = None
-    if use_ai and anthropic_available():
-        headers, samples = read_csv_content(csv_bytes, max_rows=8)
-        from db import list_opcos, sample_transactions_for_opco
+    from db import list_opcos, sample_transactions_for_opco
 
-        registry = list_opcos()
-        prior = sample_transactions_for_opco(opco_id.strip(), 15) if opco_id.strip() else []
+    registry = list_opcos()
+
+    headers, all_rows = read_csv_content(csv_bytes, max_rows=None)
+    from file_profile import build_file_profile
+
+    file_profile = build_file_profile(
+        file.filename,
+        headers,
+        all_rows,
+        sheet_name,
+        sheet_names=sheet_names,
+        sheets_breakdown=sheets_breakdown,
+    )
+
+    ai_enhancement = None
+    ai_failed = False
+    if use_ai and anthropic_available():
+        prior = sample_transactions_for_opco(opco_id.strip(), 20) if opco_id.strip() else []
         raw = analyze_with_anthropic(
-            file.filename, headers, samples, sheet_name or "",
+            file.filename,
+            headers,
+            all_rows[:8],
+            sheet_name or "",
+            file_profile=file_profile,
             registered_opcos=registry,
             prior_transactions=prior,
             selected_opco=selected_opco,
         )
         if raw:
-            ai_enhancement = to_enhancement(raw)
+            ai_enhancement = to_enhancement(raw, file_profile)
+        else:
+            ai_failed = True
+    elif use_ai and not anthropic_available():
+        ai_failed = True
 
     result = analyze_csv(
         upload_id,
@@ -260,11 +295,28 @@ async def upload_analyze(
         ai_enhancement,
         file_type=file_type,
         sheet_name=sheet_name,
+        sheet_names=sheet_names,
+        sheets_breakdown=sheets_breakdown,
+        registered_opcos=registry,
+        file_profile=file_profile,
     )
     data = result.to_dict()
     data["status"] = "pending"
+    data["opcoId"] = defaults.get("opco_id") or None
+    data["registeredOpcos"] = [
+        {"id": o["id"], "slug": o["slug"], "name": o["name"], "city": o["city"], "region": o.get("region")}
+        for o in registry
+    ]
     if ai_enhancement and ai_enhancement.get("notes"):
         data["aiNotes"] = ai_enhancement["notes"]
+    if ai_failed:
+        data.setdefault("warnings", []).append(
+            "AI analysis unavailable — check ANTHROPIC_API_KEY or retry. Heuristic mapping applied."
+        )
+    data["aiUsed"] = bool(ai_enhancement)
+    data["fileProfile"] = {
+        k: v for k, v in file_profile.items() if k != "stratifiedSamples"
+    }
 
     (folder / "analysis.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
     save_upload_meta(upload_id, {
@@ -273,6 +325,8 @@ async def upload_analyze(
         "status": "pending",
         "fileType": file_type,
         "sheetName": sheet_name,
+        "sheetNames": sheet_names,
+        "sheetsBreakdown": sheets_breakdown,
     })
 
     storage_key = None
@@ -298,8 +352,7 @@ async def upload_analyze(
         except Exception:
             pass
 
-    data["opcoId"] = opco_id.strip() or None
-    data["registeredOpcos"] = list_opcos()
+    data["opcoId"] = defaults.get("opco_id") or opco_id.strip() or None
     return data
 
 
@@ -553,7 +606,21 @@ if os.environ.get("SERVE_STATIC") == "1":
     _mount_static(app)
 
 
+def _load_dotenv() -> None:
+    env_path = ROOT / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        if key.strip() and key.strip() not in os.environ:
+            os.environ[key.strip()] = val.strip()
+
+
 if __name__ == "__main__":
+    _load_dotenv()
     UPLOADS.mkdir(parents=True, exist_ok=True)
     port = int(os.environ.get("PORT", "8000"))
     print(f"Altis ingest API — Anthropic AI: {anthropic_available()} — Supabase: {supabase_enabled()}")

@@ -5,7 +5,8 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
-from datetime import datetime
+import re
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from data_stores import DATA_STORES, route_rows, store_catalog
@@ -56,8 +57,20 @@ DEFAULT_GL_MAP: dict[str, str] = {
 }
 
 
+def normalize_gl_account(value) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    if re.fullmatch(r"\d+\.0+", text):
+        text = text.split(".")[0]
+    match = re.search(r"\d{3,6}", text)
+    return match.group(0) if match else ""
+
+
 def gl_category(gl: str, gl_map: dict[str, str] | None = None) -> str:
-    gl = str(gl).strip()
+    gl = normalize_gl_account(gl)
     mapping = gl_map or DEFAULT_GL_MAP
     if gl in mapping:
         return mapping[gl]
@@ -77,23 +90,77 @@ def row_key(date: str, gl: str, amount: float, project: str, source: str) -> str
     return hashlib.md5(raw.encode()).hexdigest()
 
 
-def parse_date(value: str) -> str:
+def parse_date(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+
     value = str(value).strip()
-    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d", "%d.%m.%Y"):
+    if not value:
+        return ""
+
+    try:
+        serial = float(value)
+        if 20000 <= serial <= 80000:
+            return (date(1899, 12, 30) + timedelta(days=int(serial))).isoformat()
+    except ValueError:
+        pass
+
+    cleaned = value.replace("T", " ").split("+")[0]
+    for fmt in (
+        "%Y-%m-%d",
+        "%Y-%m-%d %H:%M:%S",
+        "%d-%m-%Y",
+        "%d-%m-%Y %H:%M:%S",
+        "%d/%m/%Y",
+        "%d/%m/%Y %H:%M:%S",
+        "%Y/%m/%d",
+        "%d.%m.%Y",
+    ):
         try:
-            return datetime.strptime(value, fmt).strftime("%Y-%m-%d")
+            return datetime.strptime(cleaned, fmt).strftime("%Y-%m-%d")
         except ValueError:
             continue
     raise ValueError(f"Unparseable date: {value}")
 
 
-def normalize_amount(value: str | float | int) -> float:
+def normalize_amount(value: str | float | int | None) -> float:
+    if value is None:
+        return 0.0
     if isinstance(value, (int, float)):
         return round(float(value), 2)
-    cleaned = str(value).replace("€", "").replace(",", "").strip()
+
+    cleaned = str(value).strip()
+    if not cleaned:
+        return 0.0
+    negative = cleaned.startswith("(") and cleaned.endswith(")")
+    cleaned = (
+        cleaned.replace("€", "")
+        .replace("\u00a0", "")
+        .replace(" ", "")
+        .replace("(", "")
+        .replace(")", "")
+        .strip()
+    )
+    if cleaned.endswith("-"):
+        negative = True
+        cleaned = cleaned[:-1]
+    if "," in cleaned and "." in cleaned:
+        if cleaned.rfind(",") > cleaned.rfind("."):
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+    elif "," in cleaned:
+        cleaned = cleaned.replace(".", "").replace(",", ".")
     if cleaned.startswith("(") and cleaned.endswith(")"):
         cleaned = "-" + cleaned[1:-1]
-    return round(float(cleaned), 2)
+    if cleaned in {"", "-", "—"}:
+        return 0.0
+    amount = float(cleaned)
+    return round(-amount if negative else amount, 2)
 
 
 def load_gl_mapping_file() -> dict[str, str]:
@@ -104,7 +171,7 @@ def load_gl_mapping_file() -> dict[str, str]:
             continue
         with path.open(encoding="utf-8") as f:
             for row in csv.DictReader(f):
-                gl = row.get("gl_account", "").strip()
+                gl = normalize_gl_account(row.get("gl_account", ""))
                 cat = row.get("category", "").strip()
                 if gl and cat and cat != "unmapped":
                     mapping[gl] = cat
@@ -157,6 +224,7 @@ def merge_rows_into_store(
     seen = _existing_keys(existing)
     added = 0
     for row in new_rows:
+        row["gl_account"] = normalize_gl_account(row.get("gl_account", ""))
         row["gl_category"] = gl_category(row["gl_account"], gl_map)
         key = row_key(row["date"], row["gl_account"], float(row["amount"]), row["project_id"], row["source_system"])
         if key in seen:

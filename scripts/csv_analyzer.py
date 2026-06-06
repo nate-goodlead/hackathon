@@ -11,7 +11,14 @@ from typing import Any
 
 from data_stores import resolve_store_routing
 from db import duplicate_stats_db, load_gl_mappings
-from unified_schema import GL_CATEGORIES, duplicate_stats, gl_category, normalize_amount, parse_date
+from unified_schema import (
+    GL_CATEGORIES,
+    duplicate_stats,
+    gl_category,
+    normalize_amount,
+    normalize_gl_account,
+    parse_date,
+)
 
 # Column name patterns → unified field
 COLUMN_PATTERNS: dict[str, list[str]] = {
@@ -23,12 +30,13 @@ COLUMN_PATTERNS: dict[str, list[str]] = {
         "gl_account", "grootboek", "account", "account_code", "gb", "gl",
         "ledger", "rekening", "accountnumber", "grootboekrekening",
     ],
-    "amount": ["amount", "bedrag", "value", "waarde", "saldo"],
+    "amount": ["amount", "bedrag", "value", "waarde", "saldo", "nettoomzet"],
     "debit": ["debit", "debet", "debetbedrag", "debit_amount"],
     "credit": ["credit", "creditbedrag", "credit_amount"],
     "description": [
         "description", "omschrijving", "memo", "desc", "naam", "name",
-        "tekst", "narrative",
+        "tekst", "narrative", "boekingstekst", "boekstuk", "boeknummer",
+        "bkstnr", "dagboek",
     ],
     "opco": [
         "opco", "kostenplaats", "business_unit", "company", "bedrijf",
@@ -117,6 +125,8 @@ class AnalysisResult:
     ai_used: bool = False
     ai_briefing: dict | None = None
     sheet_name: str | None = None
+    sheet_names: list[str] = field(default_factory=list)
+    sheets_breakdown: list[dict] = field(default_factory=list)
     file_type: str = "csv"
     duplicate_check: dict | None = None
     store_routing: dict | None = None
@@ -140,6 +150,8 @@ class AnalysisResult:
             "availableColumns": self.headers,
             "fileType": self.file_type,
             "sheetName": self.sheet_name,
+            "sheetNames": self.sheet_names,
+            "sheetsBreakdown": self.sheets_breakdown,
         }
         if self.ai_briefing:
             out["aiBriefing"] = self.ai_briefing
@@ -167,7 +179,7 @@ def detect_columns(headers: list[str]) -> tuple[ColumnMapping, dict[str, float]]
             for norm_h, orig_h in normalized.items():
                 if norm_h == norm_pat:
                     score = 1.0
-                elif norm_pat in norm_h or norm_h in norm_pat:
+                elif len(norm_pat) >= 3 and norm_pat in norm_h:
                     score = 0.85
                 else:
                     continue
@@ -225,6 +237,10 @@ def _cell(row: dict[str, str], col: str | None) -> str:
     return row.get(col, "").strip()
 
 
+def _row_text(row: dict[str, str]) -> str:
+    return " ".join(str(v) for v in row.values()).lower()
+
+
 def _apply_field_gaps(defaults: dict[str, str], field_gaps: list[dict] | None) -> None:
     if not field_gaps:
         return
@@ -260,14 +276,20 @@ def normalize_row(
         txn_date = parse_date(_cell(row, date_col))
 
         gl_col = mapping.gl_account
-        gl = _cell(row, gl_col) if gl_col else ""
-        if not gl and mapping.debit:
-            gl = "0000"
+        gl = normalize_gl_account(_cell(row, gl_col) if gl_col else "")
+        inferred_sales_journal = False
+        if not gl and mapping.credit and _cell(row, mapping.credit):
+            text = _row_text(row)
+            if "verkoop" in text or "omzet" in text:
+                gl = "8000"
+                inferred_sales_journal = True
         if not gl:
             return None
 
         amount = 0.0
-        if mapping.amount and _cell(row, mapping.amount):
+        if inferred_sales_journal:
+            amount = normalize_amount(_cell(row, mapping.credit))
+        elif mapping.amount and _cell(row, mapping.amount):
             amount = normalize_amount(_cell(row, mapping.amount))
         elif mapping.debit or mapping.credit:
             deb = normalize_amount(_cell(row, mapping.debit) or "0")
@@ -344,6 +366,72 @@ def normalize_all_rows(
     return normalized, warnings
 
 
+def _merge_opco_briefing(
+    deterministic: dict,
+    ai_briefing: dict | None,
+) -> dict:
+    """Prefer higher-confidence recommendation; combine reasoning steps."""
+    if not ai_briefing:
+        return {
+            "summary": (
+                f"Deterministic match suggests {deterministic.get('recommendedOpco') or 'no opco'} "
+                f"({deterministic.get('opcoMatchConfidence', 0):.0%} confidence)."
+            ),
+            "dataType": "unknown",
+            "recommendedOpco": deterministic.get("recommendedOpco"),
+            "recommendedOpcoId": deterministic.get("recommendedOpcoId"),
+            "recommendedCity": deterministic.get("recommendedCity"),
+            "opcoMatchConfidence": deterministic.get("opcoMatchConfidence", 0),
+            "opcoLinkReasoning": deterministic.get("opcoLinkReasoning", []),
+            "qualityChecks": [],
+            "mergeRecommendation": "review_required",
+            "controllerQuestion": "Confirm the suggested operating company before merging.",
+        }
+
+    det_conf = deterministic.get("opcoMatchConfidence", 0)
+    ai_conf = ai_briefing.get("opcoMatchConfidence", 0)
+    det_steps = deterministic.get("opcoLinkReasoning", [])
+    ai_steps = ai_briefing.get("opcoLinkReasoning") or []
+
+    if not ai_briefing.get("recommendedOpcoId") and deterministic.get("recommendedOpcoId"):
+        ai_briefing["recommendedOpcoId"] = deterministic["recommendedOpcoId"]
+        ai_briefing["recommendedOpco"] = deterministic.get("recommendedOpco")
+        ai_briefing["recommendedCity"] = deterministic.get("recommendedCity")
+        ai_briefing["opcoMatchConfidence"] = max(ai_conf, det_conf)
+
+    merged_steps = [*det_steps]
+    for step in ai_steps:
+        if step not in merged_steps:
+            merged_steps.append(step)
+    if merged_steps:
+        ai_briefing["opcoLinkReasoning"] = merged_steps
+
+    return ai_briefing
+
+
+def _enrich_briefing_from_normalized(
+    briefing: dict | None,
+    normalized: list[dict],
+    total_rows: int,
+    file_profile: dict | None,
+) -> dict | None:
+    if not briefing:
+        return briefing
+    if normalized:
+        dates = sorted(r["date"] for r in normalized if r.get("date"))
+        if dates:
+            briefing["dateRange"] = {"start": dates[0], "end": dates[-1]}
+        briefing["rowsNormalized"] = len(normalized)
+        briefing["rowsSkipped"] = max(0, total_rows - len(normalized))
+    if file_profile:
+        briefing["rowCountEstimate"] = file_profile.get("rowCount", total_rows)
+        if not briefing.get("dateRange") and file_profile.get("dateRangeComputed"):
+            briefing["dateRange"] = file_profile["dateRangeComputed"]
+        briefing["uniqueGlAccounts"] = file_profile.get("uniqueGlAccounts")
+        briefing["dateParseRate"] = file_profile.get("dateParseRate")
+    return briefing
+
+
 def analyze_csv(
     upload_id: str,
     filename: str,
@@ -352,10 +440,26 @@ def analyze_csv(
     ai_enhancement: dict | None = None,
     file_type: str = "csv",
     sheet_name: str | None = None,
+    sheet_names: list[str] | None = None,
+    sheets_breakdown: list[dict] | None = None,
+    registered_opcos: list[dict] | None = None,
+    file_profile: dict | None = None,
 ) -> AnalysisResult:
     defaults = defaults or {}
     headers, all_rows = read_csv_content(content, max_rows=None)
     sample_rows = all_rows[:8]
+
+    deterministic = {}
+    if registered_opcos:
+        from opco_matcher import match_opco_deterministic
+
+        deterministic = match_opco_deterministic(filename, headers, sample_rows, registered_opcos)
+        if not defaults.get("opco_id") and deterministic.get("recommendedOpcoId"):
+            defaults["opco_id"] = deterministic["recommendedOpcoId"]
+        if not defaults.get("opco") and deterministic.get("recommendedOpco"):
+            defaults["opco"] = deterministic["recommendedOpco"]
+        if not defaults.get("city") and deterministic.get("recommendedCity"):
+            defaults["city"] = deterministic["recommendedCity"]
 
     if ai_enhancement and ai_enhancement.get("ai_briefing"):
         brief = ai_enhancement["ai_briefing"]
@@ -375,6 +479,14 @@ def analyze_csv(
             if v and k in ColumnMapping.__dataclass_fields__:
                 setattr(mapping, k, v)
                 col_conf[k] = max(col_conf.get(k, 0), 0.9)
+    if ai_enhancement and ai_enhancement.get("schema_mapping"):
+        for field, spec in ai_enhancement["schema_mapping"].items():
+            if not isinstance(spec, dict):
+                continue
+            col = spec.get("source_column")
+            if col and field in ColumnMapping.__dataclass_fields__:
+                setattr(mapping, field, col)
+                col_conf[field] = max(col_conf.get(field, 0), float(spec.get("confidence", 0.88)))
 
     detected_system, sys_conf = detect_system(headers, sample_rows)
     if ai_enhancement and ai_enhancement.get("detected_system"):
@@ -385,6 +497,13 @@ def analyze_csv(
         defaults["source_system"] = detected_system
 
     warnings: list[str] = []
+    sheet_names = sheet_names or []
+    sheets_breakdown = sheets_breakdown or []
+    if len(sheet_names) > 1:
+        parts = [f"{s.get('sheetName', '?')} ({s.get('rowCount', 0)} rows)" for s in sheets_breakdown]
+        warnings.append(
+            f"Merged {len(sheet_names)} worksheets: {', '.join(parts) if parts else ', '.join(sheet_names)}"
+        )
     if not mapping.date:
         warnings.append("Could not detect date column — please map manually")
     if not mapping.gl_account and not (mapping.debit and mapping.credit):
@@ -407,6 +526,8 @@ def analyze_csv(
                 sug.reason = ai.get("reason", sug.reason)
 
     ai_briefing = ai_enhancement.get("ai_briefing") if ai_enhancement else None
+    ai_briefing = _merge_opco_briefing(deterministic, ai_briefing)
+    ai_briefing = _enrich_briefing_from_normalized(ai_briefing, normalized, len(all_rows), file_profile)
     ai_type = ai_briefing.get("dataType") if ai_briefing else None
     ai_target = ai_briefing.get("targetStore") if ai_briefing else None
     store_routing = resolve_store_routing(filename, normalized, ai_type, ai_target, gl_map)
@@ -437,6 +558,8 @@ def analyze_csv(
         ai_used=bool(ai_enhancement),
         ai_briefing=ai_briefing,
         sheet_name=sheet_name,
+        sheet_names=sheet_names,
+        sheets_breakdown=sheets_breakdown,
         file_type=file_type,
         duplicate_check=dup_check,
         store_routing=store_routing,
