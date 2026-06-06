@@ -53,6 +53,22 @@ def ensure_extracted() -> None:
 
 
 def load_locations() -> list[dict]:
+    from db import list_opcos
+
+    opcos = list_opcos(active_only=False)
+    if opcos:
+        return [
+            {
+                "opco_id": o.get("slug") or o["id"],
+                "opco_name": o["name"],
+                "city": o["city"],
+                "lat": o["lat"],
+                "lng": o["lng"],
+                "source_system": o.get("sourceSystem"),
+                "data_folder": o.get("dataFolder"),
+            }
+            for o in opcos
+        ]
     path = INCOMING / "opco_locations.json"
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
@@ -318,7 +334,23 @@ def write_unified(rows: list[dict], locations: list[dict]) -> None:
         "Location column added — source files do not include company location.",
         "Weather.csv generated per city for schedule-delay modelling.",
     ]
-    write_stores_and_master(merged_by_store, gl_map, notes)
+    from collections import defaultdict
+
+    from db import insert_transactions, load_gl_mappings, resolve_opco_id, supabase_enabled, upsert_gl_mappings
+
+    if supabase_enabled():
+        gl_map_db = load_gl_mappings()
+        gl_map_db.update(gl_map)
+        by_opco: dict[str, list[dict]] = defaultdict(list)
+        for r in rows:
+            oid = resolve_opco_id(r.get("opco", ""))
+            if oid:
+                by_opco[oid].append(r)
+        for oid, batch in by_opco.items():
+            insert_transactions(batch, oid, gl_map_db)
+        upsert_gl_mappings(gl_map_db)
+    else:
+        write_stores_and_master(merged_by_store, gl_map, notes)
 
     public = ROOT / "public" / "data"
     public.mkdir(parents=True, exist_ok=True)

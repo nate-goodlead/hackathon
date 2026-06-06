@@ -2,13 +2,32 @@ export type UploadStatus = "pending" | "confirmed";
 
 export type MergeRecommendation = "ready" | "review_required" | "reject";
 
+export interface FieldGap {
+  field: string;
+  suggested_value: string;
+  confidence: number;
+  reason: string;
+}
+
+export interface RegisteredOpco {
+  id: string;
+  slug: string;
+  name: string;
+  city: string;
+  sourceSystem?: string | null;
+  dataFolder?: string | null;
+}
+
 export interface AiBriefing {
   summary: string;
   dataType: string;
   targetStore?: string | null;
   storeReason?: string;
   recommendedOpco: string | null;
+  recommendedOpcoId?: string | null;
   recommendedCity: string | null;
+  opcoMatchConfidence?: number;
+  fieldGaps?: FieldGap[];
   dateRange?: { start: string | null; end: string | null };
   qualityChecks: string[];
   mergeRecommendation: MergeRecommendation;
@@ -69,6 +88,8 @@ export interface DuplicateCheck {
 
 export interface UploadAnalysis {
   uploadId: string;
+  opcoId?: string | null;
+  registeredOpcos?: RegisteredOpco[];
   filename: string;
   rowCount: number;
   headers: string[];
@@ -101,6 +122,7 @@ export interface StoreStat {
 export interface UnifiedStats {
   totalRows: number;
   opcos: string[];
+  opcoIds?: string[];
   systems: string[];
   cities: string[];
   unmappedGl: number;

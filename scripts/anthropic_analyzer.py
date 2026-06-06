@@ -11,6 +11,9 @@ from typing import Any
 PROMPT = """You are a financial data analyst for Altis Groep, a PE-backed Dutch roofing portfolio.
 Analyze this accounting export and return JSON only (no markdown fences).
 
+Use the REGISTERED_OPCOS list below — recommended_opco_id MUST be an id from that list (or null).
+Fill field_gaps for any missing context (city, source_system, project_id, gl_category) using opco profile + file content.
+
 {
   "summary": "2-4 sentences in plain English explaining what this file contains, which company/opco it likely belongs to, date range, and whether it looks like transactions, WIP, or P&L",
   "data_type": "transactions|wip|pl|mixed|revenue|costs|overhead|unknown",
@@ -18,8 +21,13 @@ Analyze this accounting export and return JSON only (no markdown fences).
   "store_reason": "One sentence: why this file belongs in that store (e.g. GB 8000 revenue export, Yuki mixed GL journal)",
   "detected_system": "Gilde|Yuki|Exact|Snelstart|Unknown",
   "system_confidence": 0.0-1.0,
-  "recommended_opco": "string or null",
+  "recommended_opco": "opco name string or null",
+  "recommended_opco_id": "uuid from REGISTERED_OPCOS or null",
   "recommended_city": "Dutch city if inferable or null",
+  "opco_match_confidence": 0.0-1.0,
+  "field_gaps": [
+    {"field": "city|project_id|source_system|gl_category|opco", "suggested_value": "...", "confidence": 0.0-1.0, "reason": "..."}
+  ],
   "date_range": {"start": "YYYY-MM-DD or null", "end": "YYYY-MM-DD or null"},
   "row_count_estimate": number,
   "quality_checks": ["list of issues or confirmations for a controller"],
@@ -57,15 +65,35 @@ def _build_prompt(
     headers: list[str],
     sample_rows: list[dict[str, str]],
     sheet_name: str,
+    registered_opcos: list[dict] | None = None,
+    prior_transactions: list[dict] | None = None,
+    selected_opco: dict | None = None,
 ) -> str:
-    return (
-        PROMPT
-        + f"\nFilename: {filename}\n"
-        + f"Sheet: {sheet_name or 'n/a'}\n"
-        + f"Headers: {json.dumps(headers, ensure_ascii=False)}\n\n"
-        + "Sample rows (first 8):\n"
-        + json.dumps(sample_rows[:8], indent=2, ensure_ascii=False)
-    )
+    parts = [
+        PROMPT,
+        f"\nFilename: {filename}\n",
+        f"Sheet: {sheet_name or 'n/a'}\n",
+        f"Headers: {json.dumps(headers, ensure_ascii=False)}\n\n",
+        "Sample rows (first 8):\n",
+        json.dumps(sample_rows[:8], indent=2, ensure_ascii=False),
+    ]
+    if registered_opcos:
+        registry = [
+            {
+                "id": o.get("id"),
+                "name": o.get("name"),
+                "city": o.get("city"),
+                "source_system": o.get("sourceSystem"),
+                "data_folder": o.get("dataFolder"),
+            }
+            for o in registered_opcos
+        ]
+        parts.append("\n\nREGISTERED_OPCOS:\n" + json.dumps(registry, indent=2, ensure_ascii=False))
+    if selected_opco:
+        parts.append("\n\nUSER_SELECTED_OPCO:\n" + json.dumps(selected_opco, indent=2, ensure_ascii=False))
+    if prior_transactions:
+        parts.append("\n\nPRIOR_TRANSACTIONS_FOR_OPCO (sample):\n" + json.dumps(prior_transactions[:15], indent=2, ensure_ascii=False))
+    return "".join(parts)
 
 
 def anthropic_available() -> bool:
@@ -77,23 +105,24 @@ def analyze_with_anthropic(
     headers: list[str],
     sample_rows: list[dict[str, str]],
     sheet_name: str = "",
+    registered_opcos: list[dict] | None = None,
+    prior_transactions: list[dict] | None = None,
+    selected_opco: dict | None = None,
 ) -> dict[str, Any] | None:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return None
 
     model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
-    prompt = _build_prompt(filename, headers, sample_rows, sheet_name)
+    prompt = _build_prompt(
+        filename, headers, sample_rows, sheet_name,
+        registered_opcos, prior_transactions, selected_opco,
+    )
 
     body = json.dumps({
         "model": model,
         "max_tokens": 4096,
-        "messages": [
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        ],
+        "messages": [{"role": "user", "content": prompt}],
     }).encode()
 
     req = urllib.request.Request(
@@ -125,19 +154,24 @@ def analyze_with_anthropic(
 
 def to_enhancement(result: dict[str, Any]) -> dict[str, Any]:
     """Map Anthropic JSON to pipeline enhancement shape."""
+    field_gaps = result.get("field_gaps", [])
     return {
         "detected_system": result.get("detected_system"),
         "system_confidence": result.get("system_confidence", 0.9),
         "column_mapping": result.get("column_mapping", {}),
         "gl_suggestions": result.get("gl_suggestions", []),
         "notes": result.get("summary", ""),
+        "field_gaps": field_gaps,
         "ai_briefing": {
             "summary": result.get("summary", ""),
             "dataType": result.get("data_type", "unknown"),
             "targetStore": result.get("target_store"),
             "storeReason": result.get("store_reason", ""),
             "recommendedOpco": result.get("recommended_opco"),
+            "recommendedOpcoId": result.get("recommended_opco_id"),
             "recommendedCity": result.get("recommended_city"),
+            "opcoMatchConfidence": result.get("opco_match_confidence", 0),
+            "fieldGaps": field_gaps,
             "dateRange": result.get("date_range"),
             "qualityChecks": result.get("quality_checks", []),
             "mergeRecommendation": result.get("merge_recommendation", "review_required"),

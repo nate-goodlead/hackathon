@@ -26,12 +26,13 @@ export function useUploadApi() {
 
   async function analyzeFile(
     file: File,
-    opts: { opco?: string; city?: string; sourceSystem?: string; useAi?: boolean },
+    opts: { opcoId?: string; opco?: string; city?: string; sourceSystem?: string; useAi?: boolean },
   ): Promise<UploadAnalysis> {
     setLoading(true);
     setError(null);
     const form = new FormData();
     form.append("file", file);
+    form.append("opco_id", opts.opcoId ?? "");
     form.append("opco", opts.opco ?? "");
     form.append("city", opts.city ?? "");
     form.append("source_system", opts.sourceSystem ?? "");
@@ -56,6 +57,7 @@ export function useUploadApi() {
     payload: {
       columnMapping: UploadAnalysis["columnMapping"];
       glSuggestions: UploadAnalysis["glSuggestions"];
+      opcoId: string;
       opco?: string;
       city?: string;
       sourceSystem?: string;
@@ -76,6 +78,7 @@ export function useUploadApi() {
           columnMapping: payload.columnMapping,
           glSuggestions: payload.glSuggestions,
           glApprovals,
+          opcoId: payload.opcoId,
           opco: payload.opco,
           city: payload.city,
           sourceSystem: payload.sourceSystem,

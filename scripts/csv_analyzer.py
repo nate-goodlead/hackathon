@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from data_stores import resolve_store_routing
-from unified_schema import GL_CATEGORIES, duplicate_stats, gl_category, load_gl_mapping_file, normalize_amount, parse_date
+from db import duplicate_stats_db, load_gl_mappings
+from unified_schema import GL_CATEGORIES, duplicate_stats, gl_category, normalize_amount, parse_date
 
 # Column name patterns → unified field
 COLUMN_PATTERNS: dict[str, list[str]] = {
@@ -224,6 +225,29 @@ def _cell(row: dict[str, str], col: str | None) -> str:
     return row.get(col, "").strip()
 
 
+def _apply_field_gaps(defaults: dict[str, str], field_gaps: list[dict] | None) -> None:
+    if not field_gaps:
+        return
+    for gap in field_gaps:
+        field = gap.get("field", "")
+        value = gap.get("suggested_value")
+        conf = gap.get("confidence", 0)
+        if not value or conf < 0.6:
+            continue
+        if field == "opco" and not defaults.get("opco"):
+            defaults["opco"] = str(value)
+        elif field == "city" and not defaults.get("city"):
+            defaults["city"] = str(value)
+        elif field == "source_system" and not defaults.get("source_system"):
+            defaults["source_system"] = str(value)
+        elif field == "project_id" and defaults.get("project_id") == "PRJ-UNK-001":
+            defaults["project_id"] = str(value)
+
+
+def _city_prefix(city: str) -> str:
+    return re.sub(r"[^A-Z]", "", city.upper())[:4] or "UNK"
+
+
 def normalize_row(
     row: dict[str, str],
     mapping: ColumnMapping,
@@ -258,9 +282,12 @@ def normalize_row(
         desc = _cell(row, mapping.description) or "Imported transaction"
         opco = _cell(row, mapping.opco) or defaults.get("opco", "Unknown Opco")
         opco = opco.replace("_", " ")
-        project = _cell(row, mapping.project_id) or defaults.get("project_id", "PRJ-UNK-001")
-        source = _cell(row, mapping.source_system) or defaults.get("source_system", "Unknown")
         city = _cell(row, mapping.city) or defaults.get("city", "")
+        source = _cell(row, mapping.source_system) or defaults.get("source_system", "Unknown")
+        project = _cell(row, mapping.project_id) or defaults.get("project_id", "")
+        if not project or project == "PRJ-UNK-001":
+            prefix = _city_prefix(city or defaults.get("city", "UNK"))
+            project = f"PRJ-{prefix}-001"
 
         return {
             "date": txn_date,
@@ -332,10 +359,15 @@ def analyze_csv(
 
     if ai_enhancement and ai_enhancement.get("ai_briefing"):
         brief = ai_enhancement["ai_briefing"]
+        if not defaults.get("opco_id") and brief.get("recommendedOpcoId"):
+            defaults["opco_id"] = brief["recommendedOpcoId"]
         if not defaults.get("opco") and brief.get("recommendedOpco"):
             defaults["opco"] = brief["recommendedOpco"]
         if not defaults.get("city") and brief.get("recommendedCity"):
             defaults["city"] = brief["recommendedCity"]
+        _apply_field_gaps(defaults, brief.get("fieldGaps") or ai_enhancement.get("field_gaps"))
+    if ai_enhancement:
+        _apply_field_gaps(defaults, ai_enhancement.get("field_gaps"))
 
     mapping, col_conf = detect_columns(headers)
     if ai_enhancement and ai_enhancement.get("column_mapping"):
@@ -363,7 +395,7 @@ def analyze_csv(
     normalized, norm_warnings = normalize_all_rows(all_rows, mapping, defaults)
     warnings.extend(norm_warnings)
 
-    gl_map = load_gl_mapping_file()
+    gl_map = load_gl_mappings()
     gl_suggestions = build_gl_suggestions(normalized, gl_map)
     if ai_enhancement and ai_enhancement.get("gl_suggestions"):
         ai_by_gl = {s["gl_account"]: s for s in ai_enhancement["gl_suggestions"]}
@@ -378,7 +410,11 @@ def analyze_csv(
     ai_type = ai_briefing.get("dataType") if ai_briefing else None
     ai_target = ai_briefing.get("targetStore") if ai_briefing else None
     store_routing = resolve_store_routing(filename, normalized, ai_type, ai_target, gl_map)
-    dup_check = duplicate_stats(normalized, store_routing)
+    opco_id = defaults.get("opco_id", "")
+    if opco_id:
+        dup_check = duplicate_stats_db(normalized, opco_id, store_routing)
+    else:
+        dup_check = duplicate_stats(normalized, store_routing)
 
     if dup_check["blockMerge"]:
         warnings.append(dup_check["message"])

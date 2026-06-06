@@ -1,4 +1,5 @@
 import {
+  Building2,
   CalendarClock,
   CloudRain,
   Database,
@@ -22,6 +23,7 @@ const navItems: { id: RoleId; label: string; icon: typeof LayoutDashboard }[] = 
   { id: "schedule", label: "Field Schedule", icon: CalendarClock },
   { id: "opco", label: "Opco MD", icon: Users },
   { id: "portfolio", label: "Portfolio Map", icon: Map },
+  { id: "opcos", label: "Opco Admin", icon: Building2 },
   { id: "data", label: "Data Upload", icon: Database },
 ];
 

@@ -53,8 +53,8 @@ export function PortfolioPage() {
   const [chartYear, setChartYear] = useState("2025");
 
   useEffect(() => {
-    fetch("/data/portfolio_stats.json")
-      .then((r) => (r.ok ? r.json() : null))
+    fetch("/api/data/portfolio")
+      .then((r) => (r.ok ? r.json() : fetch("/data/portfolio_stats.json").then((r2) => r2.json())))
       .then((data) => {
         if (data?.companies?.length) {
           setCompanies(data.companies as SubsidiaryCompany[]);

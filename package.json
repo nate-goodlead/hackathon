@@ -18,6 +18,9 @@
     "data:reset": ".venv/bin/python scripts/reset_data.py",
     "data:pipeline": "npm run data:parse-incoming && npm run data:forecast",
     "data:pipeline:synthetic": "npm run data:generate && npm run data:ingest && npm run data:forecast",
+    "data:migrate-supabase": ".venv/bin/python scripts/migrate_csv_to_supabase.py",
+    "supabase:provision": ".venv/bin/python scripts/provision_supabase.py",
+    "supabase:setup": ".venv/bin/python scripts/setup_supabase.py",
     "test": "vitest run"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 export type ScenarioId = "base" | "wet" | "dry";
 
-export type RoleId = "cfo" | "opco" | "data" | "portfolio" | "schedule";
+export type RoleId = "cfo" | "opco" | "data" | "portfolio" | "schedule" | "opcos";
 
 export interface WeekForecast {
   week: number;

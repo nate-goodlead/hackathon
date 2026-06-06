@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import subprocess
 import uuid
 from pathlib import Path
@@ -12,18 +13,35 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from anthropic_analyzer import analyze_with_anthropic, anthropic_available, to_enhancement
 from csv_analyzer import ColumnMapping, analyze_csv, normalize_all_rows, read_all_csv_rows, read_csv_content
-from load_env import load_env
-from unified_schema import (
-    UPLOADS,
-    load_gl_mapping_file,
-    merge_rows_routed,
-    save_upload_meta,
-    store_stats,
-    write_stores_and_master,
+from db import (
+    build_weather_insights,
+    confirm_upload_batch,
+    create_opco,
+    create_upload_batch,
+    deactivate_opco,
+    get_current_covenant,
+    get_current_forecast,
+    get_current_portfolio,
+    get_current_traces,
+    get_current_wip,
+    get_opco_by_id,
+    insert_transactions,
+    list_opcos,
+    load_gl_mappings,
+    opco_stats,
+    supabase_enabled,
+    transaction_stats,
+    update_opco,
+    upload_file_to_storage,
+    upsert_gl_mappings,
 )
+from load_env import load_env
+from unified_schema import UPLOADS, merge_rows_routed, save_upload_meta, write_stores_and_master
 from xlsx_reader import save_xlsx_as_csv
 
 load_env()
@@ -68,7 +86,83 @@ def health():
         "status": "ok",
         "aiAvailable": anthropic_available(),
         "aiProvider": "anthropic" if anthropic_available() else "none",
+        "supabaseEnabled": supabase_enabled(),
     }
+
+
+@app.get("/api/opcos")
+def api_list_opcos():
+    stats = opco_stats()
+    opcos = list_opcos(active_only=False)
+    for o in opcos:
+        o["transactionCount"] = stats.get(o["id"], {}).get("transactionCount", 0)
+    return {"opcos": opcos}
+
+
+@app.post("/api/opcos")
+async def api_create_opco(body: dict):
+    required = ["name", "city", "lat", "lng"]
+    for field in required:
+        if not body.get(field):
+            raise HTTPException(400, f"{field} is required")
+    try:
+        opco = create_opco(body)
+        return {"ok": True, "opco": opco}
+    except RuntimeError as e:
+        raise HTTPException(503, str(e)) from e
+
+
+@app.patch("/api/opcos/{opco_id}")
+async def api_update_opco(opco_id: str, body: dict):
+    try:
+        opco = update_opco(opco_id, body)
+        return {"ok": True, "opco": opco}
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(503, str(e)) from e
+
+
+@app.delete("/api/opcos/{opco_id}")
+async def api_deactivate_opco(opco_id: str):
+    try:
+        opco = deactivate_opco(opco_id)
+        return {"ok": True, "opco": opco}
+    except RuntimeError as e:
+        raise HTTPException(503, str(e)) from e
+
+
+@app.get("/api/data/forecast")
+def api_data_forecast():
+    return get_current_forecast()
+
+
+@app.get("/api/data/traces")
+def api_data_traces(scenario: str | None = None):
+    return get_current_traces(scenario)
+
+
+@app.get("/api/data/wip")
+def api_data_wip():
+    return get_current_wip()
+
+
+@app.get("/api/data/covenant")
+def api_data_covenant():
+    return get_current_covenant()
+
+
+@app.get("/api/data/weather-insights")
+def api_data_weather():
+    insights = build_weather_insights()
+    if insights:
+        return insights
+    raise HTTPException(404, "No weather data available")
+
+
+@app.get("/api/data/portfolio")
+def api_data_portfolio():
+    return get_current_portfolio()
 
 
 @app.get("/api/uploads")
@@ -96,6 +190,7 @@ def list_uploads():
 @app.post("/api/upload/analyze")
 async def upload_analyze(
     file: UploadFile = File(...),
+    opco_id: str = Form(""),
     opco: str = Form(""),
     city: str = Form(""),
     source_system: str = Form(""),
@@ -130,17 +225,30 @@ async def upload_analyze(
     else:
         (folder / "original.csv").write_bytes(content)
 
+    selected_opco = get_opco_by_id(opco_id.strip()) if opco_id.strip() else None
     defaults = {
-        "opco": opco.strip(),
-        "city": city.strip(),
-        "source_system": source_system.strip(),
+        "opco_id": opco_id.strip(),
+        "opco": selected_opco["name"] if selected_opco else opco.strip(),
+        "city": selected_opco["city"] if selected_opco and not city.strip() else city.strip(),
+        "source_system": (
+            selected_opco["sourceSystem"] if selected_opco and not source_system.strip() else source_system.strip()
+        ),
         "project_id": "PRJ-UNK-001",
     }
 
     ai_enhancement = None
     if use_ai and anthropic_available():
         headers, samples = read_csv_content(csv_bytes, max_rows=8)
-        raw = analyze_with_anthropic(file.filename, headers, samples, sheet_name or "")
+        from db import list_opcos, sample_transactions_for_opco
+
+        registry = list_opcos()
+        prior = sample_transactions_for_opco(opco_id.strip(), 15) if opco_id.strip() else []
+        raw = analyze_with_anthropic(
+            file.filename, headers, samples, sheet_name or "",
+            registered_opcos=registry,
+            prior_transactions=prior,
+            selected_opco=selected_opco,
+        )
         if raw:
             ai_enhancement = to_enhancement(raw)
 
@@ -167,6 +275,31 @@ async def upload_analyze(
         "sheetName": sheet_name,
     })
 
+    storage_key = None
+    if is_xlsx:
+        storage_key = upload_file_to_storage(folder / "original.xlsx", f"{upload_id}/original.xlsx")
+    else:
+        storage_key = upload_file_to_storage(folder / "original.csv", f"{upload_id}/original.csv")
+
+    if supabase_enabled():
+        try:
+            create_upload_batch({
+                "uploadId": upload_id,
+                "opcoId": opco_id.strip() or None,
+                "filename": file.filename,
+                "storagePath": storage_key,
+                "sourceSystem": defaults.get("source_system"),
+                "detectedSystem": data.get("detectedSystem"),
+                "storeType": (data.get("storeRouting") or {}).get("targetStore"),
+                "aiAnalysis": data.get("aiBriefing"),
+                "columnMapping": data.get("columnMapping"),
+                "rowCount": data.get("rowCount"),
+            })
+        except Exception:
+            pass
+
+    data["opcoId"] = opco_id.strip() or None
+    data["registeredOpcos"] = list_opcos()
     return data
 
 
@@ -182,12 +315,20 @@ async def confirm_upload(upload_id: str, body: dict):
     if meta_path.exists():
         defaults = json.loads(meta_path.read_text()).get("defaults", {})
 
-    if body.get("opco"):
-        defaults["opco"] = body["opco"]
-    if body.get("city"):
-        defaults["city"] = body["city"]
-    if body.get("sourceSystem"):
-        defaults["source_system"] = body["sourceSystem"]
+    opco_id = (body.get("opcoId") or defaults.get("opco_id") or "").strip()
+    if not opco_id:
+        raise HTTPException(400, "opcoId is required — select an operating company before merging")
+
+    selected_opco = get_opco_by_id(opco_id)
+    if not selected_opco:
+        raise HTTPException(400, f"Unknown opco: {opco_id}")
+
+    defaults["opco_id"] = opco_id
+    defaults["opco"] = body.get("opco") or selected_opco["name"]
+    if body.get("city") or selected_opco.get("city"):
+        defaults["city"] = body.get("city") or selected_opco["city"]
+    if body.get("sourceSystem") or selected_opco.get("sourceSystem"):
+        defaults["source_system"] = body.get("sourceSystem") or selected_opco.get("sourceSystem") or "Unknown"
 
     _, raw_rows = _read_upload_rows(upload_id, analysis)
     normalized, warnings = normalize_all_rows(raw_rows, column_mapping, defaults)
@@ -195,7 +336,7 @@ async def confirm_upload(upload_id: str, body: dict):
     if not normalized:
         raise HTTPException(400, "No valid rows after mapping — check column mapping")
 
-    gl_map = load_gl_mapping_file()
+    gl_map = load_gl_mappings()
     approved = body.get("glApprovals", {})
     for gl, cat in approved.items():
         if cat and cat != "unmapped":
@@ -205,14 +346,9 @@ async def confirm_upload(upload_id: str, body: dict):
         if sug.get("status") == "approved" and sug.get("suggestedCategory") != "unmapped":
             gl_map[sug["glAccount"]] = sug["suggestedCategory"]
 
-    merged_by_store, added_by_store, added = merge_rows_routed(
-        normalized,
-        gl_map,
-        analysis.get("storeRouting")
-        or analysis.get("duplicateCheck", {}).get("storeRouting")
-        or body.get("storeRouting")
-        or {},
-    )
+    routing = analysis.get("storeRouting") or analysis.get("duplicateCheck", {}).get("storeRouting") or {}
+    added, added_by_store = insert_transactions(normalized, opco_id, gl_map, upload_batch_id=None)
+    upsert_gl_mappings(gl_map, opco_id)
 
     if added == 0:
         raise HTTPException(
@@ -220,8 +356,7 @@ async def confirm_upload(upload_id: str, body: dict):
             "No new rows to merge — this file is already in the central database.",
         )
 
-    routing = analysis.get("storeRouting") or analysis.get("duplicateCheck", {}).get("storeRouting") or {}
-    store_parts = [f"{added_by_store[sid]} → {sid}" for sid in added_by_store if added_by_store[sid]]
+    store_parts = [f"{added_by_store[sid]} → {sid}" for sid in added_by_store if added_by_store.get(sid)]
     notes = [
         f"Last upload: {analysis.get('filename')} ({added} new rows)",
         f"Routed: {', '.join(store_parts) if store_parts else routing.get('targetStore', 'mixed')}",
@@ -233,7 +368,18 @@ async def confirm_upload(upload_id: str, body: dict):
     if warnings:
         notes.append("Warnings: " + "; ".join(warnings))
 
-    all_rows = write_stores_and_master(merged_by_store, gl_map, notes)
+    if not supabase_enabled():
+        merged_by_store, _, _ = merge_rows_routed(normalized, gl_map, routing)
+        all_rows = write_stores_and_master(merged_by_store, gl_map, notes)
+    else:
+        from db import load_transactions_as_unified_rows
+
+        all_rows = load_transactions_as_unified_rows()
+        confirm_upload_batch(upload_id, {
+            "opcoId": opco_id,
+            "rowsAdded": added,
+            "warnings": warnings,
+        })
 
     raw_gl = ROOT / "data" / "raw" / "gl_account_mapping.csv"
     raw_gl.parent.mkdir(parents=True, exist_ok=True)
@@ -284,34 +430,17 @@ async def confirm_upload(upload_id: str, body: dict):
 
 @app.get("/api/unified/stats")
 def unified_stats():
-    from unified_schema import read_unified
-
-    rows = read_unified()
-    typed = store_stats()
-    if not rows:
-        return {
-            "totalRows": 0,
-            "opcos": [],
-            "systems": [],
-            "cities": [],
-            "unmappedGl": 0,
-            "stores": typed["stores"],
-        }
-
-    unmapped = sum(1 for r in rows if r.get("gl_category") == "unmapped")
-    return {
-        "totalRows": len(rows),
-        "opcos": sorted({r["opco"] for r in rows}),
-        "systems": sorted({r["source_system"] for r in rows}),
-        "cities": sorted({r.get("city", "") for r in rows if r.get("city")}),
-        "unmappedGl": unmapped,
-        "stores": typed["stores"],
-    }
+    return transaction_stats()
 
 
 @app.get("/api/unified/stores")
 def unified_stores():
-    return store_stats()
+    stats = transaction_stats()
+    return {
+        "totalRows": stats["totalRows"],
+        "stores": stats.get("stores", {}),
+        "storeCatalog": list(stats.get("stores", {}).values()),
+    }
 
 
 @app.get("/api/schedule/notifications")
@@ -399,7 +528,35 @@ async def schedule_ai_briefing(body: dict):
     return {"briefing": text, "aiUsed": True}
 
 
+def _mount_static(app: FastAPI) -> None:
+    dist = ROOT / "dist"
+    if not dist.exists():
+        return
+    assets = dist / "assets"
+    if assets.exists():
+        app.mount("/assets", StaticFiles(directory=assets), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def spa_fallback(full_path: str):
+        if full_path.startswith("api/"):
+            raise HTTPException(404)
+        candidate = dist / full_path
+        if candidate.is_file():
+            return FileResponse(candidate)
+        index = dist / "index.html"
+        if index.exists():
+            return FileResponse(index)
+        raise HTTPException(404)
+
+
+if os.environ.get("SERVE_STATIC") == "1":
+    _mount_static(app)
+
+
 if __name__ == "__main__":
     UPLOADS.mkdir(parents=True, exist_ok=True)
-    print(f"Altis ingest API — Anthropic AI: {anthropic_available()}")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", "8000"))
+    print(f"Altis ingest API — Anthropic AI: {anthropic_available()} — Supabase: {supabase_enabled()}")
+    if os.environ.get("SERVE_STATIC") == "1":
+        print("Serving Vite production build from dist/")
+    uvicorn.run(app, host="0.0.0.0", port=port)

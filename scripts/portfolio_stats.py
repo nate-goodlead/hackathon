@@ -24,6 +24,22 @@ OPCO_COLORS = {
 
 
 def load_locations() -> list[dict]:
+    from db import list_opcos
+
+    opcos = list_opcos(active_only=False)
+    if opcos:
+        return [
+            {
+                "opco_id": o.get("slug") or o["id"],
+                "opco_name": o["name"],
+                "city": o["city"],
+                "lat": o["lat"],
+                "lng": o["lng"],
+                "source_system": o.get("sourceSystem"),
+                "data_folder": o.get("dataFolder"),
+            }
+            for o in opcos
+        ]
     path = INCOMING / "opco_locations.json"
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
@@ -31,11 +47,9 @@ def load_locations() -> list[dict]:
 
 
 def load_unified_rows() -> list[dict]:
-    path = OUT / "unified_data.csv"
-    if not path.exists() or path.stat().st_size < 50:
-        return []
-    with path.open(encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+    from db import load_transactions_as_unified_rows
+
+    return load_transactions_as_unified_rows()
 
 
 def _month_key(date_str: str) -> str | None:
@@ -120,8 +134,10 @@ def build_portfolio_stats(unified: list[dict], locations: list[dict]) -> dict:
             "rowCount": len(rows),
         })
 
+    from db import supabase_enabled
+
     return {
-        "source": "unified_data.csv",
+        "source": "supabase" if supabase_enabled() else "unified_data.csv",
         "totalRows": len(unified),
         "companies": companies,
         "generatedAt": datetime.utcnow().isoformat() + "Z",

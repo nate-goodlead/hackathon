@@ -13,6 +13,20 @@ interface AppData {
   error: string | null;
 }
 
+async function fetchJson<T>(path: string, fallbackPath?: string): Promise<T> {
+  try {
+    const r = await fetch(path);
+    if (r.ok) return r.json() as Promise<T>;
+  } catch {
+    /* try fallback */
+  }
+  if (fallbackPath) {
+    const r = await fetch(fallbackPath);
+    if (r.ok) return r.json() as Promise<T>;
+  }
+  throw new Error(`Failed to load ${path}`);
+}
+
 export function useAppData(): AppData {
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [traces, setTraces] = useState<TraceRecord[]>([]);
@@ -27,12 +41,16 @@ export function useAppData(): AppData {
     async function load() {
       try {
         const [f, t, w, c, wi, ps] = await Promise.all([
-          fetch("/data/forecast.json").then((r) => r.json()),
-          fetch("/data/trace_data.json").then((r) => r.json()),
-          fetch("/data/wip_data.json").then((r) => r.json()),
-          fetch("/data/covenant_summary.json").then((r) => r.json()),
-          fetch("/data/weather_insights.json").then((r) => (r.ok ? r.json() : null)),
-          fetch("/data/portfolio_stats.json").then((r) => (r.ok ? r.json() : { companies: [] })),
+          fetchJson<ForecastData>("/api/data/forecast", "/data/forecast.json"),
+          fetchJson<TraceRecord[]>("/api/data/traces", "/data/trace_data.json"),
+          fetchJson<WipProject[]>("/api/data/wip", "/data/wip_data.json"),
+          fetchJson<CovenantSummary>("/api/data/covenant", "/data/covenant_summary.json"),
+          fetch("/api/data/weather-insights")
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() =>
+              fetch("/data/weather_insights.json").then((r) => (r.ok ? r.json() : null)),
+            ),
+          fetchJson<{ companies: SubsidiaryCompany[] }>("/api/data/portfolio", "/data/portfolio_stats.json"),
         ]);
         setForecast(f);
         setTraces(t);

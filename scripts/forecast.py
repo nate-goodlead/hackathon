@@ -42,13 +42,14 @@ class TraceRecord:
 
 
 def load_unified() -> tuple[list[dict], date]:
-    """Load rows from unified_data.csv; anchor 13-week window to latest data in DB."""
+    """Load rows from Supabase or unified_data.csv; anchor 13-week window to latest data."""
+    from db import load_transactions_as_unified_rows
+
     raw: list[dict] = []
-    with (OUT / "unified_data.csv").open(encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            row["amount"] = float(row["amount"])
-            row["txn_date"] = date.fromisoformat(row["date"])
-            raw.append(row)
+    for row in load_transactions_as_unified_rows():
+        row["amount"] = float(row["amount"])
+        row["txn_date"] = date.fromisoformat(row["date"])
+        raw.append(row)
 
     if not raw:
         return [], START
@@ -436,24 +437,11 @@ def main() -> None:
 
     wip = build_wip_from_unified(unified, weather_by_city, base_delay)
     covenant_summary = build_covenant_summary(forecast, covenant)
-    write_portfolio_stats()
+    portfolio = write_portfolio_stats(unified)
 
-    OUT.mkdir(parents=True, exist_ok=True)
-    PUBLIC.mkdir(parents=True, exist_ok=True)
+    from db import save_forecast_run
 
-    payload = {"base": forecast["base"], "wet": forecast["wet"], "dry": forecast["dry"]}
-    (OUT / "forecast.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    (OUT / "trace_data.json").write_text(json.dumps(all_traces, indent=2), encoding="utf-8")
-    (OUT / "wip_data.json").write_text(json.dumps(wip, indent=2), encoding="utf-8")
-    (OUT / "covenant_summary.json").write_text(json.dumps(covenant_summary, indent=2), encoding="utf-8")
-
-    for name in (
-        "forecast.json", "trace_data.json", "wip_data.json",
-        "covenant_summary.json", "portfolio_stats.json",
-    ):
-        src = OUT / name
-        if src.exists():
-            (PUBLIC / name).write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    save_forecast_run(forecast_start, forecast, all_traces, wip, covenant_summary, portfolio)
 
     print(f"Forecast built from {len(unified):,} unified rows")
     print(f"  base net={sum(w['net'] for w in forecast['base']):,.0f} EUR")

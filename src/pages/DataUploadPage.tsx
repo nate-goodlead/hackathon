@@ -11,6 +11,7 @@ import {
   Sparkles,
   Upload,
 } from "lucide-react";
+import { useOpcos } from "../hooks/useOpcos";
 import { useUploadApi } from "../hooks/useUploadApi";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,8 +55,10 @@ const STEPS: { id: Step; label: string }[] = [
 
 export function DataUploadPage() {
   const { aiAvailable, stats, loading, error, analyzeFile, confirmUpload } = useUploadApi();
+  const { opcos: registeredOpcos } = useOpcos();
   const [analysis, setAnalysis] = useState<UploadAnalysis | null>(null);
   const [step, setStep] = useState<Step>("upload");
+  const [opcoId, setOpcoId] = useState("");
   const [opco, setOpco] = useState("");
   const [city, setCity] = useState("");
   const [sourceSystem, setSourceSystem] = useState("");
@@ -76,13 +79,22 @@ export function DataUploadPage() {
       setStep("upload");
       try {
         const result = await analyzeFile(file, {
+          opcoId,
           opco,
           city,
           sourceSystem: sourceSystem || undefined,
           useAi: useAi && aiAvailable,
         });
         setAnalysis(result);
-        if (result.aiBriefing?.recommendedOpco && !opco) {
+        if (result.aiBriefing?.recommendedOpcoId && !opcoId) {
+          setOpcoId(result.aiBriefing.recommendedOpcoId);
+          const match = registeredOpcos.find((o) => o.id === result.aiBriefing?.recommendedOpcoId);
+          if (match) {
+            setOpco(match.name);
+            if (!city) setCity(match.city);
+            if (!sourceSystem && match.sourceSystem) setSourceSystem(match.sourceSystem);
+          }
+        } else if (result.aiBriefing?.recommendedOpco && !opco) {
           setOpco(result.aiBriefing.recommendedOpco);
         }
         if (result.aiBriefing?.recommendedCity && !city) {
@@ -98,8 +110,18 @@ export function DataUploadPage() {
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
     },
-    [analyzeFile, opco, city, sourceSystem, useAi, aiAvailable],
+    [analyzeFile, opcoId, opco, city, sourceSystem, useAi, aiAvailable, registeredOpcos],
   );
+
+  function onOpcoSelect(id: string) {
+    setOpcoId(id);
+    const match = registeredOpcos.find((o) => o.id === id);
+    if (match) {
+      setOpco(match.name);
+      setCity(match.city);
+      if (match.sourceSystem) setSourceSystem(match.sourceSystem);
+    }
+  }
 
   const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -137,7 +159,7 @@ export function DataUploadPage() {
   }
 
   async function handleConfirm() {
-    if (!analysis || analysis.duplicateCheck?.blockMerge) return;
+    if (!analysis || analysis.duplicateCheck?.blockMerge || !opcoId) return;
 
     setStep("merging");
     setMergeProgress(8);
@@ -153,6 +175,7 @@ export function DataUploadPage() {
       const result = await confirmUpload(analysis.uploadId, {
         columnMapping: analysis.columnMapping,
         glSuggestions: analysis.glSuggestions,
+        opcoId,
         opco: opco || undefined,
         city: city || undefined,
         sourceSystem: sourceSystem || undefined,
@@ -229,16 +252,28 @@ export function DataUploadPage() {
           <Card className="lg:col-span-1 border border-white/[0.08] pb-6 ring-0">
             <CardHeader className="pb-0">
               <CardTitle className="text-base">Context</CardTitle>
-              <CardDescription>Optional — AI will suggest opco and city if blank</CardDescription>
+              <CardDescription>Required — select the opco this dataset belongs to</CardDescription>
             </CardHeader>
             <CardContent className="pb-0">
               <div className="space-y-5">
-                <Field
-                  label="Operating company"
-                  value={opco}
-                  onChange={setOpco}
-                  placeholder="e.g. Portfolio Company Heeze"
-                />
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-foreground/90">
+                    Operating company *
+                  </span>
+                  <select
+                    value={opcoId}
+                    onChange={(e) => onOpcoSelect(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    required
+                  >
+                    <option value="">Select opco…</option>
+                    {registeredOpcos.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name} ({o.city})
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <Field label="City" value={city} onChange={setCity} placeholder="e.g. Heeze" />
                 <Field
                   label="Source system"

@@ -33,6 +33,21 @@ def week_start(d: date | None = None) -> date:
 
 
 def load_locations() -> list[dict]:
+    from db import list_opcos
+
+    opcos = list_opcos(active_only=False)
+    if opcos:
+        return [
+            {
+                "opco_id": o.get("slug") or o["id"],
+                "opco_name": o["name"],
+                "city": o["city"],
+                "lat": o["lat"],
+                "lng": o["lng"],
+                "source_system": o.get("sourceSystem"),
+            }
+            for o in opcos
+        ]
     path = INCOMING / "opco_locations.json"
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
@@ -273,6 +288,29 @@ def write_outputs(
     ]:
         (OUT / name).write_text(content, encoding="utf-8")
         (PUBLIC / name).write_text(content, encoding="utf-8")
+
+    from db import resolve_opco_id, supabase_enabled, upsert_weather_daily
+
+    if supabase_enabled():
+        db_rows = []
+        for loc in locations:
+            city = loc["city"]
+            opco_id = resolve_opco_id(loc.get("opco_name", "")) or resolve_opco_id(loc.get("opco_id", ""))
+            if not opco_id:
+                continue
+            for d in city_data[city]["daily"]:
+                db_rows.append({
+                    "opco_id": opco_id,
+                    "weather_date": d["date"].isoformat() if hasattr(d["date"], "isoformat") else str(d["date"]),
+                    "rainfall_mm": d["rainfall_mm"],
+                    "temp_min_c": d["temp_min_c"],
+                    "temp_max_c": d["temp_max_c"],
+                    "precip_hours": None,
+                    "is_stoppage": d.get("is_stoppage", False),
+                    "stoppage_reasons": d.get("stoppage", []),
+                    "source": "open-meteo",
+                })
+        upsert_weather_daily(db_rows)
 
 
 def fetch_all_weather(locations: list[dict] | None = None) -> dict:

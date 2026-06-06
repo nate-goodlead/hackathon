@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CFODashboard } from "./pages/CFODashboard";
 import { DataUploadPage } from "./pages/DataUploadPage";
+import { OpcoManagementPage } from "./pages/OpcoManagementPage";
 import { OpcoMDDashboard } from "./pages/OpcoMDDashboard";
 import { FieldSchedulePage } from "./pages/FieldSchedulePage";
 import { PortfolioPage } from "./pages/PortfolioPage";
@@ -41,6 +42,8 @@ export default function App() {
         <main className="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6 lg:px-8 lg:pb-8">
           {role === "portfolio" ? (
             <PortfolioPage />
+          ) : role === "opcos" ? (
+            <OpcoManagementPage />
           ) : role === "data" ? (
             <DataUploadPage />
           ) : dashboardBlocked && loading ? (
