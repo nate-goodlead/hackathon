@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none" role="img" aria-label="Altis Groep">
+  <rect width="120" height="120" rx="28" fill="#141414"/>
+  <path d="M60 22 L92 88 H72 L66 74 H54 L48 88 H28 L60 22 Z" fill="#00e5c8"/>
+  <path d="M54 62 H66 L60 48 Z" fill="#141414"/>
+  <text x="60" y="108" text-anchor="middle" fill="#00e5c8" font-family="system-ui, sans-serif" font-size="11" font-weight="700" letter-spacing="0.12em">ALTIS</text>
+</svg>

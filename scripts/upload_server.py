@@ -314,6 +314,91 @@ def unified_stores():
     return store_stats()
 
 
+@app.get("/api/schedule/notifications")
+def schedule_notifications():
+    from schedule_planner import list_notifications
+
+    return {"notifications": list_notifications()}
+
+
+@app.get("/api/schedule/whatsapp/status")
+def schedule_whatsapp_status():
+    from whatsapp_bridge import whatsapp_status
+
+    payload, status = whatsapp_status()
+    if status >= 500:
+        return {
+            "connected": False,
+            "bridgeOnline": False,
+            "error": payload.get("error", "WhatsApp bridge offline"),
+        }
+    return {**payload, "bridgeOnline": True}
+
+
+@app.get("/api/schedule/whatsapp/groups")
+def schedule_whatsapp_groups():
+    from whatsapp_bridge import whatsapp_groups
+
+    payload, status = whatsapp_groups()
+    if status != 200:
+        raise HTTPException(status if status >= 400 else 503, payload.get("error", "Unavailable"))
+    return payload
+
+
+@app.post("/api/schedule/whatsapp/configure")
+async def schedule_whatsapp_configure(body: dict):
+    from whatsapp_bridge import whatsapp_configure
+
+    group_jid = (body.get("groupJid") or "").strip()
+    if not group_jid:
+        raise HTTPException(400, "groupJid required")
+    payload, status = whatsapp_configure(group_jid)
+    if status != 200:
+        raise HTTPException(status if status >= 400 else 503, payload.get("error", "Configure failed"))
+    return payload
+
+
+@app.post("/api/schedule/notify")
+async def schedule_notify(body: dict):
+    from schedule_planner import add_notification
+    from whatsapp_bridge import whatsapp_send
+
+    message = (body.get("message") or "").strip()
+    if not message:
+        raise HTTPException(400, "message required")
+
+    wa_payload, wa_status = whatsapp_send(message)
+    whatsapp_sent = wa_status == 200 and wa_payload.get("sent")
+    channel = "WhatsApp (Baileys)" if whatsapp_sent else "Altis Crew WhatsApp (local log)"
+
+    entry = add_notification(
+        message=message,
+        city=body.get("city", "All sites"),
+        week_label=body.get("weekLabel", "W1"),
+        channel=channel,
+        author=body.get("author", "Field Schedule"),
+    )
+    entry["whatsappSent"] = whatsapp_sent
+    if not whatsapp_sent:
+        entry["whatsappError"] = wa_payload.get("error")
+    return entry
+
+
+@app.post("/api/schedule/ai-briefing")
+async def schedule_ai_briefing(body: dict):
+    from schedule_planner import ai_crew_briefing
+
+    sites = body.get("sites") or []
+    summary = body.get("weatherSummary") or ""
+    text = ai_crew_briefing(sites, summary)
+    if not text:
+        raise HTTPException(
+            503,
+            "AI briefing unavailable — set ANTHROPIC_API_KEY in .env and restart API",
+        )
+    return {"briefing": text, "aiUsed": True}
+
+
 if __name__ == "__main__":
     UPLOADS.mkdir(parents=True, exist_ok=True)
     print(f"Altis ingest API — Anthropic AI: {anthropic_available()}")

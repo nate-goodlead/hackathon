@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Person 2: Five-driver 13-week forecast with base/wet/dry scenarios."""
+"""Five-driver 13-week forecast built from unified_data.csv (central database)."""
 
 from __future__ import annotations
 
 import csv
 import json
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
 from paths import data_path
+from portfolio_stats import write_portfolio_stats
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "output"
@@ -20,21 +21,9 @@ START = date.today() - timedelta(days=date.today().weekday())
 WEEKS = 13
 MATERIALS_LAG_DAYS = 30
 PAYMENT_LAG = {"small": 30, "large": 45}
+LARGE_OPCO_BILLING_THRESHOLD = 1_000_000
 RAIN_THRESHOLD = 5.0
 FROST_THRESHOLD = 0.0
-
-
-@dataclass
-class Milestone:
-    project_id: str
-    project_name: str
-    opco: str
-    city: str
-    milestone_name: str
-    billing: float
-    scheduled_week: int
-    customer_segment: str
-    pct: float
 
 
 @dataclass
@@ -48,40 +37,44 @@ class TraceRecord:
     project_id: str
     project_name: str
     assumption: str
+    source_date: str = ""
+    source_description: str = ""
 
 
-def load_unified() -> list[dict]:
-    rows = []
+def load_unified() -> tuple[list[dict], date]:
+    """Load rows from unified_data.csv; anchor 13-week window to latest data in DB."""
+    raw: list[dict] = []
     with (OUT / "unified_data.csv").open(encoding="utf-8") as f:
         for row in csv.DictReader(f):
             row["amount"] = float(row["amount"])
-            row["week"] = min(WEEKS, max(1, (date.fromisoformat(row["date"]) - START).days // 7 + 1))
-            rows.append(row)
-    return rows
+            row["txn_date"] = date.fromisoformat(row["date"])
+            raw.append(row)
 
+    if not raw:
+        return [], START
 
-def load_milestones() -> list[Milestone]:
-    milestones = []
-    with data_path("projects_wip.csv").open(encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            milestones.append(Milestone(
-                project_id=row["project_id"],
-                project_name=row["project_name"],
-                opco=row["opco"],
-                city=row.get("city", "Heeze"),
-                milestone_name=row["milestone_name"],
-                billing=float(row["milestone_billing"]),
-                scheduled_week=int(row["scheduled_week"]),
-                customer_segment=row["customer_segment"],
-                pct=float(row["milestone_pct"]),
-            ))
-    return milestones
+    latest = max(r["txn_date"] for r in raw)
+    forecast_start = latest - timedelta(weeks=WEEKS - 1)
+    forecast_start = forecast_start - timedelta(days=forecast_start.weekday())
+
+    rows: list[dict] = []
+    window_end = forecast_start + timedelta(weeks=WEEKS)
+    for row in raw:
+        d = row["txn_date"]
+        if d < forecast_start or d >= window_end:
+            continue
+        row["week"] = min(WEEKS, max(1, (d - forecast_start).days // 7 + 1))
+        rows.append(row)
+
+    return rows, forecast_start
 
 
 def load_weather_by_city() -> dict[str, dict[int, float]]:
-    """Delay days per city per week from Open-Meteo weather.csv."""
     by_city_week: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
-    with data_path("weather.csv").open(encoding="utf-8") as f:
+    path = data_path("weather.csv")
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as f:
         for row in csv.DictReader(f):
             city = row["city"]
             w = int(row["week"])
@@ -105,7 +98,6 @@ def load_weather_by_city() -> dict[str, dict[int, float]]:
 
 
 def load_weather() -> dict[int, float]:
-    """Fallback: average delay days per week across all cities."""
     by_city = load_weather_by_city()
     by_week: dict[int, list[float]] = defaultdict(list)
     for city_delays in by_city.values():
@@ -123,12 +115,37 @@ def shift_week(week: int, delay_days: int) -> int:
     return min(WEEKS, max(1, week + delay_weeks))
 
 
-def scenario_rain_multiplier(scenario: str) -> float:
+def is_billing(row: dict) -> bool:
+    return row.get("gl_category") == "billing" or str(row.get("gl_account", "")).startswith("8")
+
+
+def is_materials(row: dict) -> bool:
+    return row.get("gl_category") == "materials" or str(row.get("gl_account", "")).startswith("4")
+
+
+def is_subcontractor(row: dict) -> bool:
+    return row.get("gl_category") == "subcontractors" or str(row.get("gl_account", "")).startswith("5")
+
+
+def delay_days(city: str, week: int, weather_by_city: dict, base_delay: dict, scenario: str) -> int:
+    city_delay = weather_by_city.get(city, base_delay)
+    base_val = city_delay.get(week, base_delay.get(week, 0))
     if scenario == "wet":
-        return 2.0
+        return int(round(base_val * 2)) + (1 if week <= 6 else 0)
     if scenario == "dry":
-        return 0.5
-    return 1.0
+        return max(0, int(round(base_val * 0.5)) - 1)
+    return int(round(base_val))
+
+
+def opco_segments(unified: list[dict]) -> dict[str, str]:
+    billing_by_opco: dict[str, float] = defaultdict(float)
+    for row in unified:
+        if is_billing(row) and row["amount"] > 0:
+            billing_by_opco[row["opco"]] += row["amount"]
+    return {
+        opco: "large" if total >= LARGE_OPCO_BILLING_THRESHOLD else "small"
+        for opco, total in billing_by_opco.items()
+    }
 
 
 def empty_weeks() -> list[dict]:
@@ -146,108 +163,117 @@ def empty_weeks() -> list[dict]:
 
 def build_materials(unified: list[dict], weeks: list[dict], traces: list[TraceRecord], scenario: str) -> None:
     for row in unified:
-        if row["gl_category"] != "materials":
+        if not is_materials(row):
             continue
-        order_date = date.fromisoformat(row["date"])
+        order_date = row["txn_date"]
         cash_date = order_date + timedelta(days=MATERIALS_LAG_DAYS)
-        w = min(WEEKS, max(1, (cash_date - START).days // 7 + 1))
+        w = row["week"]  # already within forecast window
+        if cash_date > order_date:
+            w = min(WEEKS, max(1, w + MATERIALS_LAG_DAYS // 7))
         weeks[w - 1]["materials"] += row["amount"]
         traces.append(TraceRecord(
             week=w, driver="materials", amount=row["amount"], scenario=scenario,
             source_system=row["source_system"], gl_account=row["gl_account"],
-            project_id=row["project_id"], project_name=row["description"],
-            assumption=f"net-{MATERIALS_LAG_DAYS} payment lag on materials order",
+            project_id=row["project_id"], project_name=row.get("description", row["opco"]),
+            assumption=f"Unified DB row — net-{MATERIALS_LAG_DAYS}d materials lag",
+            source_date=row["date"], source_description=row.get("description", ""),
         ))
 
 
-def build_subcontractors(unified: list[dict], milestones: list[Milestone], weeks: list[dict], traces: list[TraceRecord], scenario: str) -> None:
-    sub_by_project = defaultdict(list)
+def build_subcontractors(unified: list[dict], weeks: list[dict], traces: list[TraceRecord], scenario: str) -> None:
     for row in unified:
-        if row["gl_category"] == "subcontractors":
-            sub_by_project[row["project_id"]].append(row)
-
-    for ms in milestones:
-        events = sub_by_project.get(ms.project_id, [])
-        if not events:
+        if not is_subcontractor(row):
             continue
-        amount = sum(e["amount"] for e in events) / len(events)
-        w = ms.scheduled_week
-        weeks[w - 1]["subcontractors"] += amount
-        src = events[0]
+        w = row["week"]
+        weeks[w - 1]["subcontractors"] += row["amount"]
         traces.append(TraceRecord(
-            week=w, driver="subcontractors", amount=amount, scenario=scenario,
-            source_system=src["source_system"], gl_account=src["gl_account"],
-            project_id=ms.project_id, project_name=ms.project_name,
-            assumption=f"Released at {ms.milestone_name} milestone ({ms.pct:.0%} complete)",
+            week=w, driver="subcontractors", amount=row["amount"], scenario=scenario,
+            source_system=row["source_system"], gl_account=row["gl_account"],
+            project_id=row["project_id"], project_name=row.get("description", row["opco"]),
+            assumption="Unified DB subcontractor transaction",
+            source_date=row["date"], source_description=row.get("description", ""),
         ))
 
 
 def build_billing_and_weather(
-    milestones: list[Milestone],
+    unified: list[dict],
     weather_by_city: dict[str, dict[int, float]],
     base_delay: dict[int, float],
     scenario: str,
     weeks: list[dict],
     traces: list[TraceRecord],
 ) -> None:
-    for ms in milestones:
-        city_delay = weather_by_city.get(ms.city, base_delay)
-        base_delay_val = city_delay.get(ms.scheduled_week, base_delay.get(ms.scheduled_week, 0))
-        if scenario == "wet":
-            delay_days = int(round(base_delay_val * 2)) + (1 if ms.scheduled_week <= 6 else 0)
-        elif scenario == "dry":
-            delay_days = max(0, int(round(base_delay_val * 0.5)) - 1)
-        else:
-            delay_days = int(round(base_delay_val))
-        base_week = ms.scheduled_week
-        adjusted_week = shift_week(base_week, delay_days)
+    for row in unified:
+        if not is_billing(row) or row["amount"] <= 0:
+            continue
+        city = row.get("city") or "Heeze"
+        base_week = row["week"]
+        delay = delay_days(city, base_week, weather_by_city, base_delay, scenario)
+        adjusted_week = shift_week(base_week, delay)
+        amount = row["amount"]
 
-        weeks[adjusted_week - 1]["milestoneBilling"] += ms.billing
+        weeks[adjusted_week - 1]["milestoneBilling"] += amount
         traces.append(TraceRecord(
-            week=adjusted_week, driver="milestoneBilling", amount=ms.billing, scenario=scenario,
-            source_system="WIP", gl_account="8000",
-            project_id=ms.project_id, project_name=ms.project_name,
-            assumption=f"Milestone {ms.milestone_name} invoiceable W{adjusted_week} (scheduled W{base_week})",
+            week=adjusted_week, driver="milestoneBilling", amount=amount, scenario=scenario,
+            source_system=row["source_system"], gl_account=row["gl_account"],
+            project_id=row["project_id"], project_name=row.get("description", row["opco"]),
+            assumption=f"Unified billing GL {row['gl_account']} — scheduled W{base_week}, cash W{adjusted_week}",
+            source_date=row["date"], source_description=row.get("description", ""),
         ))
 
         if adjusted_week > base_week:
-            gap = -ms.billing
+            gap = -amount
             weeks[base_week - 1]["weatherImpact"] += gap
             traces.append(TraceRecord(
                 week=base_week, driver="weatherImpact", amount=gap, scenario=scenario,
                 source_system="Weather", gl_account="—",
-                project_id=ms.project_id, project_name=ms.project_name,
-                assumption=f"Rain/frost in {ms.city} delay {delay_days}d → billing shifted W{base_week}→W{adjusted_week} ({scenario})",
+                project_id=row["project_id"], project_name=row.get("description", row["opco"]),
+                assumption=f"Weather in {city}: billing shifted W{base_week}→W{adjusted_week} ({scenario})",
+                source_date=row["date"], source_description=row.get("description", ""),
             ))
 
 
 def build_payment_lag(
-    milestones: list[Milestone],
+    unified: list[dict],
+    segments: dict[str, str],
     weather_by_city: dict[str, dict[int, float]],
     base_delay: dict[int, float],
     scenario: str,
     weeks: list[dict],
     traces: list[TraceRecord],
 ) -> None:
-    for ms in milestones:
-        city_delay = weather_by_city.get(ms.city, base_delay)
-        base_delay_val = city_delay.get(ms.scheduled_week, base_delay.get(ms.scheduled_week, 0))
-        if scenario == "wet":
-            delay_days = int(round(base_delay_val * 2)) + (1 if ms.scheduled_week <= 6 else 0)
-        elif scenario == "dry":
-            delay_days = max(0, int(round(base_delay_val * 0.5)) - 1)
-        else:
-            delay_days = int(round(base_delay_val))
-        billing_week = shift_week(ms.scheduled_week, delay_days)
-        lag_days = PAYMENT_LAG[ms.customer_segment]
+    """Shift billed amounts to cash-collection weeks (timing only — net-neutral across 13 weeks)."""
+    billing_by_week_opco: dict[tuple[int, str], float] = defaultdict(float)
+    sample_row: dict[tuple[int, str], dict] = {}
+
+    for row in unified:
+        if not is_billing(row) or row["amount"] <= 0:
+            continue
+        city = row.get("city") or "Heeze"
+        base_week = row["week"]
+        delay = delay_days(city, base_week, weather_by_city, base_delay, scenario)
+        billing_week = shift_week(base_week, delay)
+        key = (billing_week, row["opco"])
+        billing_by_week_opco[key] += row["amount"]
+        sample_row[key] = row
+
+    for (billing_week, opco), total in billing_by_week_opco.items():
+        segment = segments.get(opco, "small")
+        lag_days = PAYMENT_LAG[segment]
         cash_week = shift_week(billing_week, lag_days)
-        lag_effect = -ms.billing * 0.15
-        weeks[cash_week - 1]["paymentLag"] += lag_effect
+        if cash_week == billing_week:
+            continue
+        weeks[billing_week - 1]["milestoneBilling"] -= total
+        weeks[cash_week - 1]["milestoneBilling"] += total
+        weeks[billing_week - 1]["paymentLag"] -= total
+        weeks[cash_week - 1]["paymentLag"] += total
+        row = sample_row[(billing_week, opco)]
         traces.append(TraceRecord(
-            week=cash_week, driver="paymentLag", amount=lag_effect, scenario=scenario,
-            source_system="Assumption", gl_account="—",
-            project_id=ms.project_id, project_name=ms.project_name,
-            assumption=f"{lag_days}-day customer payment lag ({ms.customer_segment} customer)",
+            week=cash_week, driver="paymentLag", amount=total, scenario=scenario,
+            source_system=row["source_system"], gl_account=row["gl_account"],
+            project_id=row["project_id"], project_name=row.get("description", opco),
+            assumption=f"{lag_days}d collection lag — €{total:,.0f} moved W{billing_week}→W{cash_week}",
+            source_date=row["date"], source_description=f"Unified DB · {opco}",
         ))
 
 
@@ -262,7 +288,7 @@ def finalize_net(weeks: list[dict]) -> None:
 
 def build_scenario(
     unified: list[dict],
-    milestones: list[Milestone],
+    segments: dict[str, str],
     weather_by_city: dict[str, dict[int, float]],
     base_delay: dict[int, float],
     scenario: str,
@@ -270,60 +296,81 @@ def build_scenario(
     weeks = empty_weeks()
     traces: list[TraceRecord] = []
     build_materials(unified, weeks, traces, scenario)
-    build_subcontractors(unified, milestones, weeks, traces, scenario)
-    build_billing_and_weather(milestones, weather_by_city, base_delay, scenario, weeks, traces)
-    build_payment_lag(milestones, weather_by_city, base_delay, scenario, weeks, traces)
+    build_subcontractors(unified, weeks, traces, scenario)
+    build_billing_and_weather(unified, weather_by_city, base_delay, scenario, weeks, traces)
+    build_payment_lag(unified, segments, weather_by_city, base_delay, scenario, weeks, traces)
     finalize_net(weeks)
     return weeks, traces
 
 
-def build_wip_status(milestones: list[Milestone], weather_by_city: dict[str, dict[int, float]], base_delay: dict[int, float]) -> list[dict]:
-    by_project: dict[str, dict] = {}
-    for ms in milestones:
-        city_delay = weather_by_city.get(ms.city, base_delay)
-        delay = int(city_delay.get(ms.scheduled_week, base_delay.get(ms.scheduled_week, 0)))
+def build_wip_from_unified(
+    unified: list[dict],
+    weather_by_city: dict[str, dict[int, float]],
+    base_delay: dict[int, float],
+) -> list[dict]:
+    by_opco: dict[str, dict] = {}
+    for row in unified:
+        opco = row.get("opco") or "Unknown"
+        city = row.get("city") or "Unknown"
+        entry = by_opco.setdefault(opco, {
+            "projectId": row.get("project_id", f"PRJ-{city[:4].upper()}-001"),
+            "project": f"{city} — {opco}",
+            "opco": opco,
+            "city": city,
+            "billingTotal": 0.0,
+            "materialsTotal": 0.0,
+            "subTotal": 0.0,
+            "lastBillingWeek": 1,
+            "sourceSystem": row.get("source_system", ""),
+        })
+        if is_billing(row) and row["amount"] > 0:
+            entry["billingTotal"] += row["amount"]
+            entry["lastBillingWeek"] = max(entry["lastBillingWeek"], row["week"])
+        elif is_materials(row):
+            entry["materialsTotal"] += abs(row["amount"])
+        elif is_subcontractor(row):
+            entry["subTotal"] += abs(row["amount"])
+
+    result = []
+    for opco, data in by_opco.items():
+        city = data["city"]
+        billing = data["billingTotal"]
+        contract = max(400_000, round(billing * 1.25))
+        pct = min(95.0, round((billing / contract) * 100, 1)) if contract else 0
+        delay = delay_days(city, data["lastBillingWeek"], weather_by_city, base_delay, "base")
         status = "On Track"
         if delay >= 2:
             status = "At Risk"
         if delay >= 3:
             status = "Delayed"
 
-        existing = by_project.get(ms.project_id)
-        entry = {
-            "projectId": ms.project_id,
-            "project": ms.project_name,
-            "opco": ms.opco,
-            "contractValue": max(400_000, round(ms.billing * 4)),
-            "wipToDate": round(ms.billing * ms.pct * 2),
-            "pctComplete": round(ms.pct * 100, 1),
-            "nextMilestone": ms.milestone_name,
+        result.append({
+            "projectId": data["projectId"],
+            "project": data["project"],
+            "opco": opco,
+            "contractValue": contract,
+            "wipToDate": round(billing),
+            "pctComplete": pct,
+            "nextMilestone": f"Billing week W{data['lastBillingWeek']}",
             "status": status,
             "weatherRisk": delay >= 1,
             "riskReason": (
-                f"Rain in {ms.city} W{ms.scheduled_week} pushed {ms.milestone_name} milestone"
+                f"Weather in {city} may delay W{data['lastBillingWeek']} billing"
                 if delay >= 1 else ""
             ),
-            "materialsCommitted": round(ms.billing * 0.35),
-            "subcontractorWeek": ms.scheduled_week,
+            "materialsCommitted": round(data["materialsTotal"]),
+            "subcontractorWeek": data["lastBillingWeek"],
             "actionNeeded": (
-                f"Review {ms.milestone_name} schedule in {ms.city}"
+                f"Review schedule — {data['sourceSystem']} data shows €{billing:,.0f} billed"
                 if status in ("At Risk", "Delayed") else ""
             ),
-        }
-        if not existing or ms.scheduled_week >= existing.get("_week", 0):
-            entry["_week"] = ms.scheduled_week
-            by_project[ms.project_id] = entry
-
-    result = []
-    for v in by_project.values():
-        v.pop("_week", None)
-        result.append(v)
-    return result
+        })
+    return sorted(result, key=lambda x: x["opco"])
 
 
 def build_covenant_summary(forecast: dict, covenant: dict) -> dict:
-    base = forecast["base"]
     wet = forecast["wet"]
+    base = forecast["base"]
     dry = forecast["dry"]
     headroom_by_scenario = {}
     for key, weeks in forecast.items():
@@ -361,26 +408,35 @@ def trace_to_dict(t: TraceRecord) -> dict:
         "projectId": t.project_id,
         "projectName": t.project_name,
         "assumption": t.assumption,
+        "sourceDate": t.source_date,
+        "sourceDescription": t.source_description,
     }
 
 
 def main() -> None:
-    unified = load_unified()
-    milestones = load_milestones()
+    unified, forecast_start = load_unified()
+    if not unified:
+        print("No unified data — run data:pipeline or upload via Data Ingest first.")
+        return
+
+    print(f"Forecast window: {forecast_start.isoformat()} (+13 weeks), {len(unified):,} rows")
+
     weather_by_city = load_weather_by_city()
     base_delay = load_weather()
     covenant = load_covenant()
+    segments = opco_segments(unified)
 
     forecast: dict[str, list] = {}
     all_traces: list[dict] = []
 
     for scenario in ("base", "wet", "dry"):
-        weeks, traces = build_scenario(unified, milestones, weather_by_city, base_delay, scenario)
+        weeks, traces = build_scenario(unified, segments, weather_by_city, base_delay, scenario)
         forecast[scenario] = weeks
         all_traces.extend(trace_to_dict(t) for t in traces)
 
-    wip = build_wip_status(milestones, weather_by_city, base_delay)
+    wip = build_wip_from_unified(unified, weather_by_city, base_delay)
     covenant_summary = build_covenant_summary(forecast, covenant)
+    write_portfolio_stats()
 
     OUT.mkdir(parents=True, exist_ok=True)
     PUBLIC.mkdir(parents=True, exist_ok=True)
@@ -391,10 +447,17 @@ def main() -> None:
     (OUT / "wip_data.json").write_text(json.dumps(wip, indent=2), encoding="utf-8")
     (OUT / "covenant_summary.json").write_text(json.dumps(covenant_summary, indent=2), encoding="utf-8")
 
-    for name in ("forecast.json", "trace_data.json", "wip_data.json", "covenant_summary.json"):
-        (PUBLIC / name).write_text((OUT / name).read_text(encoding="utf-8"), encoding="utf-8")
+    for name in (
+        "forecast.json", "trace_data.json", "wip_data.json",
+        "covenant_summary.json", "portfolio_stats.json",
+    ):
+        src = OUT / name
+        if src.exists():
+            (PUBLIC / name).write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
 
-    print(f"Forecast built: base net={sum(w['net'] for w in forecast['base']):,.0f} EUR")
+    print(f"Forecast built from {len(unified):,} unified rows")
+    print(f"  base net={sum(w['net'] for w in forecast['base']):,.0f} EUR")
+    print(f"  WIP projects={len(wip)} opcos")
 
 
 if __name__ == "__main__":

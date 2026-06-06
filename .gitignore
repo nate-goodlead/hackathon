@@ -1,4 +1,5 @@
 node_modules
+.venv
 dist
 .DS_Store
 *.local
@@ -9,4 +10,6 @@ data/uploads/*
 !data/uploads/.gitkeep
 data/incoming/*.zip
 data/incoming/extracted/
+data/whatsapp-auth/
+services/whatsapp/node_modules/
 

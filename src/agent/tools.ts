@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import {
-  ALTIS_COMPANIES,
   getAnnualRevenue,
+  type SubsidiaryCompany,
 } from "../data/altisPortfolio";
 import { SCENARIO_LABELS } from "../types";
 import type {
@@ -19,6 +19,7 @@ export interface ToolContext {
   weatherInsights: WeatherInsights | null;
   scenario: ScenarioId;
   onSetScenario: (s: ScenarioId) => void;
+  portfolio?: SubsidiaryCompany[];
 }
 
 export const AGENT_TOOLS: Anthropic.Tool[] = [
@@ -97,19 +98,26 @@ export function executeTool(
 ): string {
   switch (name) {
     case "get_portfolio_summary": {
-      const summary = ALTIS_COMPANIES.map((c) => ({
+      const companies = ctx.portfolio ?? [];
+      const summary = companies.map((c) => ({
         id: c.id,
         name: c.name,
         city: c.city,
         dataQuality: c.dataQuality,
         dataNote: c.dataNote,
+        rowCount: c.rowCount,
         annualRevenue: {
           "2023": getAnnualRevenue(c, "2023"),
           "2024": getAnnualRevenue(c, "2024"),
           "2025": getAnnualRevenue(c, "2025"),
+          "2026": getAnnualRevenue(c, "2026"),
         },
       }));
-      return JSON.stringify(summary, null, 2);
+      return JSON.stringify(
+        { source: "unified_data.csv", subsidiaries: summary },
+        null,
+        2,
+      );
     }
 
     case "get_forecast_data": {

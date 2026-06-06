@@ -11,13 +11,12 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import {
-  ALTIS_COMPANIES,
   getAnnualRevenue,
   getMonthlyRevenue,
   type SubsidiaryCompany,
 } from "../data/altisPortfolio";
 
-const YEARS = ["2023", "2024", "2025"];
+const YEARS = ["2023", "2024", "2025", "2026"];
 
 const QUALITY_LABELS: Record<SubsidiaryCompany["dataQuality"], string> = {
   complete: "Complete",
@@ -48,11 +47,24 @@ export function PortfolioPage() {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.CircleMarker[]>([]);
+  const [companies, setCompanies] = useState<SubsidiaryCompany[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<SubsidiaryCompany | null>(null);
   const [chartYear, setChartYear] = useState("2025");
 
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
+    fetch("/data/portfolio_stats.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.companies?.length) {
+          setCompanies(data.companies as SubsidiaryCompany[]);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!mapRef.current || mapInstanceRef.current || companies.length === 0) return;
 
     const map = L.map(mapRef.current, {
       center: [52.2, 5.9],
@@ -72,10 +84,11 @@ export function PortfolioPage() {
     L.control.zoom({ position: "bottomright" }).addTo(map);
 
     const maxRev = Math.max(
-      ...ALTIS_COMPANIES.map((c) => getAnnualRevenue(c, "2025"))
+      ...companies.map((c) => getAnnualRevenue(c, "2025")),
+      1
     );
 
-    markersRef.current = ALTIS_COMPANIES.map((company) => {
+    markersRef.current = companies.map((company) => {
       const rev = getAnnualRevenue(company, "2025");
       const radius = 14 + (rev / maxRev) * 32;
 
@@ -110,9 +123,9 @@ export function PortfolioPage() {
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, []);
+  }, [companies]);
 
-  const comparisonData = ALTIS_COMPANIES.map((c) => ({
+  const comparisonData = companies.map((c) => ({
     name: c.city,
     revenue: Math.round(getAnnualRevenue(c, chartYear) / 1000),
     color: c.color,
@@ -125,13 +138,23 @@ export function PortfolioPage() {
           Portfolio Revenue Map
         </h1>
         <p className="mt-1 text-sm text-text-muted">
-          Altis Groep subsidiaries — click a marker or chip to drill down
+          Live data from unified database — click a marker or chip to drill down
         </p>
       </div>
 
+      {loading && (
+        <p className="text-sm text-text-muted">Loading portfolio from central database…</p>
+      )}
+
+      {!loading && companies.length === 0 && (
+        <p className="text-sm text-amber-400">
+          No portfolio data yet. Run <code className="font-mono">npm run data:pipeline</code> or upload via Data Ingest.
+        </p>
+      )}
+
       {/* Company chips */}
       <div className="flex flex-wrap gap-2">
-        {ALTIS_COMPANIES.map((c) => (
+        {companies.map((c) => (
           <button
             key={c.id}
             type="button"
@@ -272,8 +295,8 @@ export function PortfolioPage() {
                     <Tooltip
                       contentStyle={TOOLTIP_STYLE}
                       labelStyle={{ color: "#fff" }}
-                      formatter={(v: number) => [
-                        `€${v.toLocaleString()}K`,
+                      formatter={(v) => [
+                        `€${Number(v ?? 0).toLocaleString()}K`,
                         "Revenue",
                       ]}
                       cursor={{ fill: "rgba(255,255,255,0.04)" }}
@@ -338,9 +361,9 @@ export function PortfolioPage() {
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
                     labelStyle={{ color: "#fff" }}
-                    formatter={(v: number) => [
-                      `€${(v / 1000).toFixed(1)}M`,
-                      "Revenue (est.)",
+                    formatter={(v) => [
+                      `€${(Number(v ?? 0) / 1000).toFixed(1)}M`,
+                      "Revenue",
                     ]}
                     cursor={{ fill: "rgba(255,255,255,0.04)" }}
                   />

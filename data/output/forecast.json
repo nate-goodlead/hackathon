@@ -7,68 +7,68 @@
       "subcontractors": 0,
       "milestoneBilling": 0,
       "paymentLag": 0,
-      "weatherImpact": -170000,
-      "net": -170000
+      "weatherImpact": -2473077,
+      "net": -2473077
     },
     {
       "week": 2,
       "label": "W2",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 255000,
-      "paymentLag": 0,
-      "weatherImpact": 0,
-      "net": 255000
+      "milestoneBilling": 0,
+      "paymentLag": -2922073,
+      "weatherImpact": -1025085,
+      "net": -3947158
     },
     {
       "week": 3,
       "label": "W3",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 325000,
-      "paymentLag": 0,
+      "milestoneBilling": 0,
+      "paymentLag": -1936282,
       "weatherImpact": 0,
-      "net": 325000
+      "net": -1936282
     },
     {
       "week": 4,
       "label": "W4",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 120000,
-      "paymentLag": 0,
+      "milestoneBilling": 0,
+      "paymentLag": -1299885,
       "weatherImpact": 0,
-      "net": 120000
+      "net": -1299885
     },
     {
       "week": 5,
       "label": "W5",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 310000,
-      "paymentLag": 0,
+      "milestoneBilling": 0,
+      "paymentLag": -568285,
       "weatherImpact": 0,
-      "net": 310000
+      "net": -568285
     },
     {
       "week": 6,
       "label": "W6",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 95000,
-      "paymentLag": 0,
+      "milestoneBilling": 0,
+      "paymentLag": -2643298,
       "weatherImpact": 0,
-      "net": 95000
+      "net": -2643298
     },
     {
       "week": 7,
       "label": "W7",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 95000,
-      "paymentLag": 0,
+      "milestoneBilling": 0,
+      "paymentLag": -939892,
       "weatherImpact": 0,
-      "net": 95000
+      "net": -939892
     },
     {
       "week": 8,
@@ -76,9 +76,9 @@
       "materials": 0,
       "subcontractors": 0,
       "milestoneBilling": 0,
-      "paymentLag": 0,
+      "paymentLag": -706522,
       "weatherImpact": 0,
-      "net": 0
+      "net": -706522
     },
     {
       "week": 9,
@@ -86,9 +86,9 @@
       "materials": 0,
       "subcontractors": 0,
       "milestoneBilling": 0,
-      "paymentLag": 0,
+      "paymentLag": -857784,
       "weatherImpact": 0,
-      "net": 0
+      "net": -857784
     },
     {
       "week": 10,
@@ -96,39 +96,39 @@
       "materials": 0,
       "subcontractors": 0,
       "milestoneBilling": 0,
-      "paymentLag": 0,
+      "paymentLag": -1699915,
       "weatherImpact": 0,
-      "net": 0
+      "net": -1699915
     },
     {
       "week": 11,
       "label": "W11",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 0,
-      "paymentLag": -38250,
+      "milestoneBilling": 2922073,
+      "paymentLag": 2298215,
       "weatherImpact": 0,
-      "net": -38250
+      "net": 5220288
     },
     {
       "week": 12,
       "label": "W12",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 0,
-      "paymentLag": -48750,
+      "milestoneBilling": 1936282,
+      "paymentLag": 1324272,
       "weatherImpact": 0,
-      "net": -48750
+      "net": 3260554
     },
     {
       "week": 13,
       "label": "W13",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 0,
-      "paymentLag": -93000,
+      "milestoneBilling": 10203590,
+      "paymentLag": 9951446,
       "weatherImpact": 0,
-      "net": -93000
+      "net": 20155036
     }
   ],
   "wet": [
@@ -139,68 +139,68 @@
       "subcontractors": 0,
       "milestoneBilling": 0,
       "paymentLag": 0,
-      "weatherImpact": -170000,
-      "net": -170000
+      "weatherImpact": -2473077,
+      "net": -2473077
     },
     {
       "week": 2,
       "label": "W2",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 85000,
-      "paymentLag": 0,
-      "weatherImpact": -85000,
-      "net": 0
+      "milestoneBilling": 0,
+      "paymentLag": -1852805,
+      "weatherImpact": -1474081,
+      "net": -3326887
     },
     {
       "week": 3,
       "label": "W3",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 170000,
-      "paymentLag": 0,
-      "weatherImpact": -325000,
-      "net": -155000
+      "milestoneBilling": 0,
+      "paymentLag": -1874927,
+      "weatherImpact": -911197,
+      "net": -2786123
     },
     {
       "week": 4,
       "label": "W4",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 325000,
-      "paymentLag": 0,
-      "weatherImpact": -120000,
-      "net": 205000
+      "milestoneBilling": 0,
+      "paymentLag": -1130622,
+      "weatherImpact": -1299885,
+      "net": -2430507
     },
     {
       "week": 5,
       "label": "W5",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 120000,
-      "paymentLag": 0,
-      "weatherImpact": -310000,
-      "net": -190000
+      "milestoneBilling": 0,
+      "paymentLag": -1299885,
+      "weatherImpact": -568285,
+      "net": -1868170
     },
     {
       "week": 6,
       "label": "W6",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 310000,
-      "paymentLag": 0,
-      "weatherImpact": -95000,
-      "net": 215000
+      "milestoneBilling": 0,
+      "paymentLag": -568285,
+      "weatherImpact": -2643298,
+      "net": -3211582
     },
     {
       "week": 7,
       "label": "W7",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 190000,
-      "paymentLag": 0,
+      "milestoneBilling": 0,
+      "paymentLag": -3583189,
       "weatherImpact": 0,
-      "net": 190000
+      "net": -3583189
     },
     {
       "week": 8,
@@ -208,9 +208,9 @@
       "materials": 0,
       "subcontractors": 0,
       "milestoneBilling": 0,
-      "paymentLag": 0,
+      "paymentLag": -706522,
       "weatherImpact": 0,
-      "net": 0
+      "net": -706522
     },
     {
       "week": 9,
@@ -218,9 +218,9 @@
       "materials": 0,
       "subcontractors": 0,
       "milestoneBilling": 0,
-      "paymentLag": 0,
+      "paymentLag": -857784,
       "weatherImpact": 0,
-      "net": 0
+      "net": -857784
     },
     {
       "week": 10,
@@ -228,39 +228,39 @@
       "materials": 0,
       "subcontractors": 0,
       "milestoneBilling": 0,
-      "paymentLag": 0,
+      "paymentLag": -1699915,
       "weatherImpact": 0,
-      "net": 0
+      "net": -1699915
     },
     {
       "week": 11,
       "label": "W11",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 0,
-      "paymentLag": -12750,
+      "milestoneBilling": 1852805,
+      "paymentLag": 1228948,
       "weatherImpact": 0,
-      "net": -12750
+      "net": 3081754
     },
     {
       "week": 12,
       "label": "W12",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 0,
-      "paymentLag": -25500,
+      "milestoneBilling": 1874927,
+      "paymentLag": 1262917,
       "weatherImpact": 0,
-      "net": -25500
+      "net": 3137844
     },
     {
       "week": 13,
       "label": "W13",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 0,
-      "paymentLag": -141750,
+      "milestoneBilling": 11334212,
+      "paymentLag": 11082069,
       "weatherImpact": 0,
-      "net": -141750
+      "net": 22416281
     }
   ],
   "dry": [
@@ -269,70 +269,70 @@
       "label": "W1",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 85000,
-      "paymentLag": 0,
-      "weatherImpact": -85000,
-      "net": 0
+      "milestoneBilling": 0,
+      "paymentLag": -1852805,
+      "weatherImpact": -620271,
+      "net": -2473077
     },
     {
       "week": 2,
       "label": "W2",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 170000,
-      "paymentLag": 0,
-      "weatherImpact": 0,
-      "net": 170000
+      "milestoneBilling": 0,
+      "paymentLag": -1874927,
+      "weatherImpact": -219426,
+      "net": -2094352
     },
     {
       "week": 3,
       "label": "W3",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 325000,
-      "paymentLag": 0,
+      "milestoneBilling": 0,
+      "paymentLag": -1130622,
       "weatherImpact": 0,
-      "net": 325000
+      "net": -1130622
     },
     {
       "week": 4,
       "label": "W4",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 120000,
-      "paymentLag": 0,
+      "milestoneBilling": 0,
+      "paymentLag": -1299885,
       "weatherImpact": 0,
-      "net": 120000
+      "net": -1299885
     },
     {
       "week": 5,
       "label": "W5",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 310000,
-      "paymentLag": 0,
+      "milestoneBilling": 0,
+      "paymentLag": -568285,
       "weatherImpact": 0,
-      "net": 310000
+      "net": -568285
     },
     {
       "week": 6,
       "label": "W6",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 95000,
-      "paymentLag": 0,
+      "milestoneBilling": 0,
+      "paymentLag": -2643298,
       "weatherImpact": 0,
-      "net": 95000
+      "net": -2643298
     },
     {
       "week": 7,
       "label": "W7",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 95000,
-      "paymentLag": 0,
+      "milestoneBilling": 0,
+      "paymentLag": -939892,
       "weatherImpact": 0,
-      "net": 95000
+      "net": -939892
     },
     {
       "week": 8,
@@ -340,9 +340,9 @@
       "materials": 0,
       "subcontractors": 0,
       "milestoneBilling": 0,
-      "paymentLag": 0,
+      "paymentLag": -706522,
       "weatherImpact": 0,
-      "net": 0
+      "net": -706522
     },
     {
       "week": 9,
@@ -350,49 +350,49 @@
       "materials": 0,
       "subcontractors": 0,
       "milestoneBilling": 0,
-      "paymentLag": 0,
+      "paymentLag": -857784,
       "weatherImpact": 0,
-      "net": 0
+      "net": -857784
     },
     {
       "week": 10,
       "label": "W10",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 0,
-      "paymentLag": -12750,
+      "milestoneBilling": 1852805,
+      "paymentLag": 152890,
       "weatherImpact": 0,
-      "net": -12750
+      "net": 2005696
     },
     {
       "week": 11,
       "label": "W11",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 0,
-      "paymentLag": -25500,
+      "milestoneBilling": 1874927,
+      "paymentLag": 1251070,
       "weatherImpact": 0,
-      "net": -25500
+      "net": 3125996
     },
     {
       "week": 12,
       "label": "W12",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 0,
-      "paymentLag": -48750,
+      "milestoneBilling": 1130622,
+      "paymentLag": 518613,
       "weatherImpact": 0,
-      "net": -48750
+      "net": 1649235
     },
     {
       "week": 13,
       "label": "W13",
       "materials": 0,
       "subcontractors": 0,
-      "milestoneBilling": 0,
-      "paymentLag": -93000,
+      "milestoneBilling": 10203590,
+      "paymentLag": 9951446,
       "weatherImpact": 0,
-      "net": -93000
+      "net": 20155036
     }
   ]
 }

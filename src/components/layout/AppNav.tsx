@@ -1,11 +1,12 @@
 import {
+  CalendarClock,
   CloudRain,
   Database,
   LayoutDashboard,
-  Layers,
   Map,
   Users,
 } from "lucide-react";
+import { AltisLogo } from "@/components/AltisLogo";
 import type { RoleId, ScenarioId } from "../../types";
 import { SCENARIO_LABELS } from "../../types";
 
@@ -18,6 +19,7 @@ interface AppNavProps {
 
 const navItems: { id: RoleId; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "cfo", label: "CFO Forecast", icon: LayoutDashboard },
+  { id: "schedule", label: "Field Schedule", icon: CalendarClock },
   { id: "opco", label: "Opco MD", icon: Users },
   { id: "portfolio", label: "Portfolio Map", icon: Map },
   { id: "data", label: "Data Upload", icon: Database },
@@ -30,8 +32,8 @@ export function AppNav({ role, scenario, onRoleChange, onScenarioChange }: AppNa
     <>
       {/* Desktop — Kapetein Labs floating capsule */}
       <aside className="fixed bottom-4 left-4 top-4 z-50 hidden w-[72px] flex-col items-center justify-between rounded-[24px] border border-border bg-bg-elevated/90 py-6 shadow-2xl shadow-black/50 backdrop-blur-md lg:flex">
-        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-bg-tertiary text-accent-teal">
-          <Layers className="h-5 w-5" aria-hidden />
+        <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-bg-tertiary ring-1 ring-accent-teal/30">
+          <AltisLogo size={44} />
         </div>
 
         <nav className="flex flex-col gap-3" aria-label="Main navigation">
@@ -85,10 +87,10 @@ export function AppNav({ role, scenario, onRoleChange, onScenarioChange }: AppNa
             </div>
           )}
           <div
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-bg-tertiary text-[10px] font-bold text-accent-teal"
+            className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-border bg-bg-tertiary ring-1 ring-accent-teal/20"
             title="Altis Groep"
           >
-            AG
+            <AltisLogo size={40} />
           </div>
         </div>
       </aside>

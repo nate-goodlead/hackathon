@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CFODashboard } from "./pages/CFODashboard";
 import { DataUploadPage } from "./pages/DataUploadPage";
 import { OpcoMDDashboard } from "./pages/OpcoMDDashboard";
+import { FieldSchedulePage } from "./pages/FieldSchedulePage";
 import { PortfolioPage } from "./pages/PortfolioPage";
 import { AppNav } from "./components/layout/AppNav";
 import { AgentPanel } from "./agent/AgentPanel";
@@ -9,13 +10,13 @@ import { useAppData } from "./hooks/useAppData";
 import type { RoleId, ScenarioId, TraceSelection } from "./types";
 
 export default function App() {
-  const { forecast, traces, wip, covenant, weatherInsights, loading, error } = useAppData();
+  const { forecast, traces, wip, covenant, weatherInsights, portfolio, loading, error } = useAppData();
   const [role, setRole] = useState<RoleId>("data");
   const [scenario, setScenario] = useState<ScenarioId>("base");
   const [traceSelection, setTraceSelection] = useState<TraceSelection | null>(null);
 
   const dashboardBlocked =
-    role !== "data" && role !== "portfolio" && (loading || error);
+    role !== "data" && role !== "portfolio" && role !== "schedule" && (loading || error);
 
   return (
     <div className="dark min-h-screen bg-background text-foreground">
@@ -31,6 +32,7 @@ export default function App() {
         wip={wip}
         covenant={covenant}
         weatherInsights={weatherInsights}
+        portfolio={portfolio}
         scenario={scenario}
         onSetScenario={setScenario}
       />
@@ -53,6 +55,14 @@ export default function App() {
                 <code className="font-mono">npm run data:pipeline</code>
               </p>
             </div>
+          ) : role === "schedule" ? (
+            <FieldSchedulePage
+              forecast={forecast}
+              weatherInsights={weatherInsights}
+              wip={wip}
+              scenario={scenario}
+              loading={loading}
+            />
           ) : role === "cfo" ? (
             <CFODashboard
               forecast={forecast}

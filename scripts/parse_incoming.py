@@ -369,13 +369,11 @@ def main() -> None:
         }
         (RAW / "covenant_terms.json").write_text(json.dumps(default_covenant, indent=2), encoding="utf-8")
 
-    build_wip_csv(locations, rows)
-
-    # Copy locations for frontend
     (INCOMING / "opco_locations.json").write_text(
         json.dumps(locations, indent=2), encoding="utf-8"
     )
     print(f"Cities: {', '.join(sorted({r['city'] for r in rows}))}")
+    print(f"Unified database ready — {len(rows):,} rows. Run npm run data:forecast for dashboards.")
 
 
 if __name__ == "__main__":

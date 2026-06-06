@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "dev:api": ".venv/bin/python scripts/upload_server.py",
-    "dev:full": "npm run dev:api & npm run dev",
+    "dev:whatsapp": "npm run start --prefix services/whatsapp",
+    "dev:full": "npm run dev:api & npm run dev:whatsapp & npm run dev",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "data:generate": "python3 scripts/generate_raw_data.py",

@@ -72,7 +72,12 @@ export function TracePanel({ selection, traces, weekAmount, onClose }: Props) {
             <div className="mb-6 rounded-lg border border-border bg-bg-elevated/50 p-4">
               <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-text-muted">GL Account</p>
               <p className="mt-1 font-mono text-sm">{sample.glAccount}</p>
-              <p className="mt-3 text-[11px] font-medium uppercase tracking-[0.14em] text-text-muted">Assumption</p>
+              <p className="mt-3 text-[11px] font-medium uppercase tracking-[0.14em] text-text-muted">Source (unified DB)</p>
+              <p className="mt-1 font-mono text-xs text-text-primary">
+                {sample.sourceDate ?? "—"}
+                {sample.sourceDescription ? ` · ${sample.sourceDescription}` : ""}
+              </p>
+              <p className="mt-3 text-[11px] font-medium uppercase tracking-[0.14em] text-text-muted">Rule applied</p>
               <p className="mt-1 text-sm text-text-muted">{sample.assumption}</p>
             </div>
           )}

@@ -7,9 +7,10 @@ export interface SubsidiaryCompany {
   color: string;
   dataQuality: "complete" | "revenue-only" | "partial";
   dataNote: string;
-  revenue: Record<string, number>; // "jan-23" -> euros
+  revenue: Record<string, number>;
   costs: Record<string, number>;
-  annualEstimates: Record<string, number>; // "2025" -> annual total
+  annualEstimates: Record<string, number>;
+  rowCount?: number;
 }
 
 export function getAnnualRevenue(company: SubsidiaryCompany, year: string): number {
@@ -37,6 +38,7 @@ export function getMonthlyRevenue(
   }));
 }
 
+/** @deprecated Static fallback — live data comes from /data/portfolio_stats.json */
 export const ALTIS_COMPANIES: SubsidiaryCompany[] = [
   {
     id: "winschoten",

@@ -1,6 +1,6 @@
 export type ScenarioId = "base" | "wet" | "dry";
 
-export type RoleId = "cfo" | "opco" | "data" | "portfolio";
+export type RoleId = "cfo" | "opco" | "data" | "portfolio" | "schedule";
 
 export interface WeekForecast {
   week: number;
@@ -29,6 +29,8 @@ export interface TraceRecord {
   projectId: string;
   projectName: string;
   assumption: string;
+  sourceDate?: string;
+  sourceDescription?: string;
 }
 
 export type ProjectStatus = "On Track" | "At Risk" | "Delayed" | "Not Started";
