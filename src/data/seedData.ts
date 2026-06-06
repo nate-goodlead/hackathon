@@ -19,6 +19,7 @@ export const companies: Company[] = [
     cashReserve: 1_150_000,
     laborCostPerDay: 6_800,
     crewCount: 11,
+    covenantMinimumCash: 700_000,
     color: "#3b82f6",
   },
   {
@@ -28,6 +29,7 @@ export const companies: Company[] = [
     cashReserve: 880_000,
     laborCostPerDay: 5_900,
     crewCount: 8,
+    covenantMinimumCash: 520_000,
     color: "#06b6d4",
   },
   {
@@ -37,6 +39,7 @@ export const companies: Company[] = [
     cashReserve: 1_320_000,
     laborCostPerDay: 7_400,
     crewCount: 13,
+    covenantMinimumCash: 820_000,
     color: "#22c55e",
   },
   {
@@ -46,6 +49,7 @@ export const companies: Company[] = [
     cashReserve: 760_000,
     laborCostPerDay: 5_200,
     crewCount: 7,
+    covenantMinimumCash: 470_000,
     color: "#f59e0b",
   },
   {
@@ -55,6 +59,7 @@ export const companies: Company[] = [
     cashReserve: 690_000,
     laborCostPerDay: 4_900,
     crewCount: 6,
+    covenantMinimumCash: 430_000,
     color: "#8b5cf6",
   },
   {
@@ -64,6 +69,7 @@ export const companies: Company[] = [
     cashReserve: 940_000,
     laborCostPerDay: 5_700,
     crewCount: 9,
+    covenantMinimumCash: 580_000,
     color: "#ec4899",
   },
   {
@@ -73,6 +79,7 @@ export const companies: Company[] = [
     cashReserve: 610_000,
     laborCostPerDay: 4_700,
     crewCount: 5,
+    covenantMinimumCash: 390_000,
     color: "#14b8a6",
   },
 ];
@@ -508,39 +515,94 @@ export const projects: Project[] = projectSeeds.map((project) => ({
   endDate: addDays((project.startWeek + project.durationWeeks - 1) * 7),
 }));
 
-export const cashEvents: CashEvent[] = projects.flatMap((project) => {
+function seedEvent(
+  project: Project,
+  spec: {
+    suffix: string;
+    week: number;
+    type: CashEvent["type"];
+    driver: CashEvent["driver"];
+    label: string;
+    amount: number;
+    accountCode: string;
+    accountName: string;
+    sourceRow: number;
+  },
+): CashEvent {
+  const traceId = `seed-${project.id}-${spec.suffix}`;
+  return {
+    id: traceId,
+    projectId: project.id,
+    week: spec.week,
+    type: spec.type,
+    driver: spec.driver,
+    label: spec.label,
+    amount: spec.amount,
+    sourceSystem: "seed",
+    sourceFile: "seedData.ts",
+    sourceRow: spec.sourceRow,
+    accountCode: spec.accountCode,
+    accountName: spec.accountName,
+    traceId,
+  };
+}
+
+export const cashEvents: CashEvent[] = projects.flatMap((project, projectIndex) => {
   const procurementWeek = clampWeek(project.startWeek);
+  const subcontractorWeek = clampWeek(project.startWeek + Math.ceil(project.durationWeeks * 0.3));
   const milestoneWeek = clampWeek(project.startWeek + Math.ceil(project.durationWeeks * 0.45));
   const completionWeek = clampWeek(project.startWeek + project.durationWeeks);
-  const procurement = Math.round(project.contractValue * 0.24);
+  const materials = Math.round(project.contractValue * 0.14);
+  const subcontractors = Math.round(project.contractValue * 0.1);
   const milestone = Math.round(project.contractValue * 0.38);
   const completion = Math.round(project.contractValue * 0.46);
+  const rowBase = projectIndex * 4 + 2;
 
   return [
-    {
-      id: `${project.id}-materials`,
-      projectId: project.id,
+    seedEvent(project, {
+      suffix: "materials",
       week: procurementWeek,
       type: "outflow",
-      label: "Materials & subcontractors",
-      amount: procurement,
-    },
-    {
-      id: `${project.id}-milestone`,
-      projectId: project.id,
+      driver: "materials",
+      label: "Roofing materials procurement",
+      amount: materials,
+      accountCode: "4100",
+      accountName: "Materials purchase",
+      sourceRow: rowBase,
+    }),
+    seedEvent(project, {
+      suffix: "subcontractors",
+      week: subcontractorWeek,
+      type: "outflow",
+      driver: "subcontractors",
+      label: "Subcontractor labour draw",
+      amount: subcontractors,
+      accountCode: "4600",
+      accountName: "Subcontractor costs",
+      sourceRow: rowBase + 1,
+    }),
+    seedEvent(project, {
+      suffix: "milestone",
       week: milestoneWeek,
       type: "inflow",
+      driver: "billing",
       label: "Watertight milestone invoice",
       amount: milestone,
-    },
-    {
-      id: `${project.id}-completion`,
-      projectId: project.id,
+      accountCode: "8000",
+      accountName: "Milestone revenue",
+      sourceRow: rowBase + 2,
+    }),
+    seedEvent(project, {
+      suffix: "completion",
       week: completionWeek,
       type: "inflow",
+      driver: "billing",
       label: "Completion invoice",
       amount: completion,
-    },
+      accountCode: "8010",
+      accountName: "Completion revenue",
+      sourceRow: rowBase + 3,
+    }),
   ];
 });
 

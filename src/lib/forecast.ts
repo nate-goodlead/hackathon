@@ -24,47 +24,41 @@ export const SCENARIOS: Record<
     delayMultiplier: number;
     idleCostMultiplier: number;
     mitigationSavingsPct: number;
+    paymentLagDays: number;
   }
 > = {
-  expected: {
-    id: "expected",
-    label: "Expected forecast",
-    shortLabel: "Expected",
-    description: "Uses current forecast and normal planning assumptions.",
+  base: {
+    id: "base",
+    label: "Base scenario",
+    shortLabel: "Base",
+    description: "Current weather forecast and normal billing assumptions.",
     penaltyMultiplier: 1,
     delayMultiplier: 1,
     idleCostMultiplier: 1,
     mitigationSavingsPct: 0,
+    paymentLagDays: 0,
   },
-  optimistic: {
-    id: "optimistic",
-    label: "Optimistic weather",
-    shortLabel: "Optimistic",
-    description: "Assumes showers clear faster and crews recover lost hours.",
-    penaltyMultiplier: 0.72,
-    delayMultiplier: 0.75,
-    idleCostMultiplier: 0.85,
-    mitigationSavingsPct: 0.15,
-  },
-  severe: {
-    id: "severe",
-    label: "Severe-weather stress",
-    shortLabel: "Severe",
-    description: "Stress-tests stronger wind, heavier rainfall, and lower productivity.",
+  wet: {
+    id: "wet",
+    label: "Wet scenario",
+    shortLabel: "Wet",
+    description: "Heavy rain and wind delay site work and push billing receipts later.",
     penaltyMultiplier: 1.35,
     delayMultiplier: 1.4,
     idleCostMultiplier: 1.25,
     mitigationSavingsPct: 0,
+    paymentLagDays: 5,
   },
-  crew: {
-    id: "crew",
-    label: "Crew reallocation",
-    shortLabel: "Reallocate",
-    description: "Moves crews toward indoor prep and lower-risk regions before weather hits.",
-    penaltyMultiplier: 1,
-    delayMultiplier: 0.65,
-    idleCostMultiplier: 1.08,
-    mitigationSavingsPct: 0.32,
+  dry: {
+    id: "dry",
+    label: "Dry scenario",
+    shortLabel: "Dry",
+    description: "Favourable weather keeps crews productive and billing on schedule.",
+    penaltyMultiplier: 0.72,
+    delayMultiplier: 0.75,
+    idleCostMultiplier: 0.85,
+    mitigationSavingsPct: 0.15,
+    paymentLagDays: 0,
   },
 };
 
@@ -89,7 +83,7 @@ function riskLevel(score: number, exposure: number): RiskLevel {
 
 export function calculateWeatherRisk(
   weather: WeatherForecast,
-  scenario: ScenarioId = "expected",
+  scenario: ScenarioId = "base",
 ): WeatherRiskScore {
   const config = SCENARIOS[scenario];
   const reasons: string[] = [];
@@ -161,8 +155,8 @@ function recommendationFor(risk: {
 }) {
   const mainReason = risk.worstWeek.reasons[0];
 
-  if (risk.scenario === "crew") {
-    return `Reallocate crew capacity before week ${risk.worstWeek.week}; protect ${risk.project.phase.toLowerCase()} work and keep client invoicing gates warm.`;
+  if (risk.scenario === "dry") {
+    return `Maintain schedule in week ${risk.worstWeek.week}; dry conditions support on-time billing for ${risk.project.phase.toLowerCase()} work.`;
   }
 
   if (risk.riskLevel === "Critical") {
@@ -250,8 +244,14 @@ export function buildProjectRisks(data: DataBundle, scenario: ScenarioId): Proje
   });
 }
 
-export function buildCashWeeks(data: DataBundle, risks: ProjectRiskOutput[]): CashWeek[] {
+export function buildCashWeeks(
+  data: DataBundle,
+  risks: ProjectRiskOutput[],
+  scenario: ScenarioId = "base",
+): CashWeek[] {
   const startingCash = data.companies.reduce((total, company) => total + company.cashReserve, 0);
+  const covenantFloor = data.companies.reduce((total, company) => total + company.covenantMinimumCash, 0);
+  const paymentLagWeeks = Math.ceil(SCENARIOS[scenario].paymentLagDays / 7);
   const riskByProjectId = new Map(risks.map((risk) => [risk.project.id, risk]));
   const weeks: CashWeek[] = Array.from({ length: 13 }, (_, index) => ({
     week: index + 1,
@@ -263,6 +263,11 @@ export function buildCashWeeks(data: DataBundle, risks: ProjectRiskOutput[]): Ca
     delayedInflow: 0,
     idleCost: 0,
     delta: 0,
+    materialsOut: 0,
+    subcontractorsOut: 0,
+    billingIn: 0,
+    covenantFloor,
+    headroom: startingCash - covenantFloor,
   }));
 
   data.cashEvents.forEach((event) => {
@@ -271,10 +276,17 @@ export function buildCashWeeks(data: DataBundle, risks: ProjectRiskOutput[]): Ca
     baselineWeek.baseline += signedAmount(event);
 
     const risk = riskByProjectId.get(event.projectId);
-    const shift = event.type === "inflow" ? risk?.delayWeeks ?? 0 : 0;
+    const weatherShift = event.type === "inflow" ? risk?.delayWeeks ?? 0 : 0;
+    const paymentShift =
+      event.type === "inflow" && event.driver === "billing" ? paymentLagWeeks : 0;
+    const shift = weatherShift + paymentShift;
     const adjustedWeekIndex = Math.min(12, Math.max(0, event.week + shift - 1));
     const adjustedWeek = weeks[adjustedWeekIndex];
     adjustedWeek.adjusted += signedAmount(event);
+
+    if (event.driver === "materials") baselineWeek.materialsOut += event.amount;
+    else if (event.driver === "subcontractors") baselineWeek.subcontractorsOut += event.amount;
+    else if (event.driver === "billing") baselineWeek.billingIn += event.amount;
 
     if (shift > 0 && event.type === "inflow") {
       baselineWeek.delayedInflow += event.amount;
@@ -296,6 +308,7 @@ export function buildCashWeeks(data: DataBundle, risks: ProjectRiskOutput[]): Ca
     week.baselineCash = baselineCash;
     week.adjustedCash = adjustedCash;
     week.delta = adjustedCash - baselineCash;
+    week.headroom = adjustedCash - covenantFloor;
   });
 
   return weeks.map((week) => ({
@@ -307,11 +320,17 @@ export function buildCashWeeks(data: DataBundle, risks: ProjectRiskOutput[]): Ca
     delayedInflow: roundCurrency(week.delayedInflow),
     idleCost: roundCurrency(week.idleCost),
     delta: roundCurrency(week.delta),
+    materialsOut: roundCurrency(week.materialsOut),
+    subcontractorsOut: roundCurrency(week.subcontractorsOut),
+    billingIn: roundCurrency(week.billingIn),
+    covenantFloor: roundCurrency(week.covenantFloor),
+    headroom: roundCurrency(week.headroom),
   }));
 }
 
 export function summarizeForecast(data: DataBundle, risks: ProjectRiskOutput[], cashWeeks: CashWeek[]): ForecastSummary {
   const startingCash = data.companies.reduce((total, company) => total + company.cashReserve, 0);
+  const covenantFloor = data.companies.reduce((total, company) => total + company.covenantMinimumCash, 0);
   const cashAtRisk = risks.reduce((total, risk) => total + risk.cashAtRisk, 0);
   const delayedInflow = risks.reduce((total, risk) => total + risk.delayedInflow, 0);
   const idleCost = risks.reduce((total, risk) => total + risk.idleCost, 0);
@@ -325,6 +344,10 @@ export function summarizeForecast(data: DataBundle, risks: ProjectRiskOutput[], 
   const lowestAdjustedCash = Math.min(...cashWeeks.map((week) => week.adjustedCash));
   const criticalProjects = risks.filter((risk) => risk.riskLevel === "Critical").length;
   const bufferNeeded = Math.max(0, startingCash * 0.18 - lowestAdjustedCash);
+  const minHeadroom = Math.min(...cashWeeks.map((week) => week.headroom));
+  const breachWeek = cashWeeks.find((week) => week.headroom < 0)?.week ?? null;
+  const totalWeatherDelayDays = risks.reduce((total, risk) => total + risk.delayDays, 0);
+  const projectedEndCash = cashWeeks[cashWeeks.length - 1]?.adjustedCash ?? startingCash;
 
   return {
     startingCash: roundCurrency(startingCash),
@@ -336,12 +359,17 @@ export function summarizeForecast(data: DataBundle, risks: ProjectRiskOutput[], 
     criticalProjects,
     worstWeek,
     lowestAdjustedCash: roundCurrency(lowestAdjustedCash),
+    covenantFloor: roundCurrency(covenantFloor),
+    minHeadroom: roundCurrency(minHeadroom),
+    breachWeek,
+    totalWeatherDelayDays,
+    projectedEndCash: roundCurrency(projectedEndCash),
   };
 }
 
 export function buildForecastModel(data: DataBundle, scenario: ScenarioId): ForecastModel {
   const risks = buildProjectRisks(data, scenario).sort((a, b) => b.totalExposure - a.totalExposure);
-  const cashWeeks = buildCashWeeks(data, risks);
+  const cashWeeks = buildCashWeeks(data, risks, scenario);
   const summary = summarizeForecast(data, risks, cashWeeks);
 
   return {

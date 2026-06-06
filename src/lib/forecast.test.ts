@@ -30,19 +30,29 @@ describe("forecast engine", () => {
     expect(storm.lostDays).toBeGreaterThan(calm.lostDays);
   });
 
-  it("models more cash risk under the severe-weather scenario", () => {
-    const expected = buildForecastModel(seedData, "expected");
-    const severe = buildForecastModel(seedData, "severe");
+  it("models more cash risk under the wet scenario", () => {
+    const base = buildForecastModel(seedData, "base");
+    const wet = buildForecastModel(seedData, "wet");
 
-    expect(severe.summary.cashAtRisk).toBeGreaterThan(expected.summary.cashAtRisk);
-    expect(severe.summary.idleCost).toBeGreaterThan(expected.summary.idleCost);
+    expect(wet.summary.cashAtRisk).toBeGreaterThan(base.summary.cashAtRisk);
+    expect(wet.summary.idleCost).toBeGreaterThan(base.summary.idleCost);
+    expect(wet.summary.totalWeatherDelayDays).toBeGreaterThanOrEqual(base.summary.totalWeatherDelayDays);
   });
 
-  it("reduces modeled exposure when crew reallocation is applied", () => {
-    const expected = buildForecastModel(seedData, "expected");
-    const crew = buildForecastModel(seedData, "crew");
+  it("reduces modeled exposure under the dry scenario", () => {
+    const base = buildForecastModel(seedData, "base");
+    const dry = buildForecastModel(seedData, "dry");
 
-    expect(crew.summary.cashAtRisk).toBeLessThan(expected.summary.cashAtRisk);
-    expect(crew.summary.averageWorkability).toBe(expected.summary.averageWorkability);
+    expect(dry.summary.cashAtRisk).toBeLessThan(base.summary.cashAtRisk);
+    expect(dry.summary.averageWorkability).toBeGreaterThanOrEqual(base.summary.averageWorkability);
+  });
+
+  it("tracks covenant headroom and weather delay days", () => {
+    const model = buildForecastModel(seedData, "base");
+
+    expect(model.summary.covenantFloor).toBeGreaterThan(0);
+    expect(model.summary.totalWeatherDelayDays).toBeGreaterThan(0);
+    expect(model.cashWeeks).toHaveLength(13);
+    expect(model.cashWeeks[0].materialsOut).toBeGreaterThanOrEqual(0);
   });
 });

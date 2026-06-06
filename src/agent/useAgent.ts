@@ -16,7 +16,7 @@ Your job is to help portfolio managers, CFOs, and project managers understand we
 
 Available capabilities via tools:
 - Query live portfolio KPIs and forecast model (get_portfolio_summary, get_project_details)
-- Switch forecast scenarios: expected, optimistic, severe, crew reallocation (set_scenario)
+- Switch forecast scenarios: base, wet, dry (set_scenario)
 - Trigger live weather refresh from Open-Meteo (refresh_weather)
 - Draft professional communications for crews, clients, CFOs, and PMs (draft_communication)
 

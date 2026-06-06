@@ -4,7 +4,7 @@ import { useAgent } from "./useAgent";
 
 const SUGGESTIONS = [
   "What's the biggest cash risk this week?",
-  "Switch to the severe scenario",
+  "Switch to the wet scenario",
   "Draft a message to crews about weather delays",
   "Which projects need attention most?",
 ];

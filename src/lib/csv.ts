@@ -1,4 +1,5 @@
-import type { CashEvent, Company, Project, WeatherForecast } from "../types";
+import { mapDriverFromAccount } from "./accounting";
+import type { CashDriver, CashEvent, Company, Project, WeatherForecast } from "../types";
 
 type CsvRow = Record<string, string>;
 
@@ -74,6 +75,13 @@ function priority(value: string): Project["priority"] {
   return "Standard";
 }
 
+function driver(value: string, type: CashEvent["type"], accountCode = "", accountName = ""): CashDriver {
+  if (value || accountCode || accountName) {
+    return mapDriverFromAccount(accountCode, accountName || value, "");
+  }
+  return type === "inflow" ? "billing" : "materials";
+}
+
 export function rowsToCompanies(rows: CsvRow[]): Company[] {
   const companies = rows.map((row, index) => ({
     id: get(row, ["id", "company_id"], `company-${index + 1}`),
@@ -82,6 +90,11 @@ export function rowsToCompanies(rows: CsvRow[]): Company[] {
     cashReserve: num(row, ["cash_reserve", "cash", "reserve"], 500_000),
     laborCostPerDay: num(row, ["labor_cost_per_day", "daily_labor_cost"], 5_000),
     crewCount: num(row, ["crew_count", "crews"], 5),
+    covenantMinimumCash: num(
+      row,
+      ["covenant_minimum_cash", "covenant_minimum", "covenant", "covenant_floor"],
+      Math.round(num(row, ["cash_reserve", "cash", "reserve"], 500_000) * 0.6),
+    ),
     color: get(row, ["color"], ["#3b82f6", "#06b6d4", "#22c55e", "#f59e0b"][index % 4]),
   }));
 
@@ -115,16 +128,32 @@ export function rowsToProjects(rows: CsvRow[], fallbackCompanyId: string): Proje
   return projects.filter((project) => project.id && project.companyId && Number.isFinite(project.lat));
 }
 
-export function rowsToCashEvents(rows: CsvRow[]): CashEvent[] {
+export function rowsToCashEvents(rows: CsvRow[], fileName = "import.csv"): CashEvent[] {
   return rows
-    .map((row, index) => ({
-      id: get(row, ["id"], `cash-event-${index + 1}`),
-      projectId: get(row, ["project_id", "project"], ""),
-      week: Math.max(1, Math.min(13, num(row, ["week", "due_week"], 1))),
-      type: get(row, ["type"], "inflow").toLowerCase().includes("out") ? ("outflow" as const) : ("inflow" as const),
-      label: get(row, ["label", "description"], "Imported cash event"),
-      amount: Math.abs(num(row, ["amount", "value"], 0)),
-    }))
+    .map((row, index) => {
+      const type = get(row, ["type"], "inflow").toLowerCase().includes("out")
+        ? ("outflow" as const)
+        : ("inflow" as const);
+      const accountCode = get(row, ["account_code", "grootboek", "ledger_account"], "");
+      const accountName = get(row, ["account_name", "account_description"], "");
+      const rowNumber = index + 2;
+      const traceId = `csv-${fileName}-${rowNumber}`;
+      return {
+        id: get(row, ["id"], traceId),
+        projectId: get(row, ["project_id", "project"], ""),
+        week: Math.max(1, Math.min(13, num(row, ["week", "due_week"], 1))),
+        type,
+        driver: driver(get(row, ["driver", "category"], ""), type, accountCode, accountName),
+        label: get(row, ["label", "description"], "Imported cash event"),
+        amount: Math.abs(num(row, ["amount", "value"], 0)),
+        sourceSystem: "csv" as const,
+        sourceFile: fileName,
+        sourceRow: rowNumber,
+        accountCode: accountCode || "—",
+        accountName: accountName || "Imported row",
+        traceId,
+      };
+    })
     .filter((event) => event.projectId && event.amount > 0);
 }
 

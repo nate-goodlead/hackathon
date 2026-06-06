@@ -1,8 +1,12 @@
-export type ScenarioId = "expected" | "optimistic" | "severe" | "crew";
+export type ScenarioId = "base" | "wet" | "dry";
 
 export type CashEventType = "inflow" | "outflow";
 
+export type CashDriver = "materials" | "subcontractors" | "billing" | "other";
+
 export type RiskLevel = "Low" | "Medium" | "High" | "Critical";
+
+export type SourceSystem = "seed" | "exact" | "csv" | "gilde" | "yuki" | "snelstart";
 
 export interface Company {
   id: string;
@@ -11,6 +15,7 @@ export interface Company {
   cashReserve: number;
   laborCostPerDay: number;
   crewCount: number;
+  covenantMinimumCash: number;
   color: string;
 }
 
@@ -37,8 +42,15 @@ export interface CashEvent {
   projectId: string;
   week: number;
   type: CashEventType;
+  driver: CashDriver;
   label: string;
   amount: number;
+  sourceSystem: SourceSystem;
+  sourceFile: string;
+  sourceRow: number;
+  accountCode: string;
+  accountName: string;
+  traceId: string;
 }
 
 export interface WeatherForecast {
@@ -57,6 +69,13 @@ export interface DataBundle {
   projects: Project[];
   cashEvents: CashEvent[];
   weatherForecast: WeatherForecast[];
+}
+
+export interface WeatherLoadState {
+  status: "idle" | "loading" | "live" | "fallback";
+  lastUpdated: string | null;
+  citiesLoaded: number;
+  message: string;
 }
 
 export interface WeatherRiskScore {
@@ -93,6 +112,11 @@ export interface CashWeek {
   delayedInflow: number;
   idleCost: number;
   delta: number;
+  materialsOut: number;
+  subcontractorsOut: number;
+  billingIn: number;
+  covenantFloor: number;
+  headroom: number;
 }
 
 export interface ForecastSummary {
@@ -105,6 +129,11 @@ export interface ForecastSummary {
   criticalProjects: number;
   worstWeek: number;
   lowestAdjustedCash: number;
+  covenantFloor: number;
+  minHeadroom: number;
+  breachWeek: number | null;
+  totalWeatherDelayDays: number;
+  projectedEndCash: number;
 }
 
 export interface ForecastModel {
@@ -112,4 +141,11 @@ export interface ForecastModel {
   risks: ProjectRiskOutput[];
   cashWeeks: CashWeek[];
   summary: ForecastSummary;
+}
+
+export interface TraceContext {
+  scenario: ScenarioId;
+  scenarioLabel: string;
+  weatherSource: string;
+  paymentLagDays: number;
 }

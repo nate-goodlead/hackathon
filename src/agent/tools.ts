@@ -26,13 +26,13 @@ export const TOOL_DEFINITIONS: Tool[] = [
   {
     name: "set_scenario",
     description:
-      "Switch the active forecast scenario on the dashboard. Options: expected, optimistic, severe, crew.",
+      "Switch the active forecast scenario on the dashboard. Options: base, wet, dry.",
     input_schema: {
       type: "object" as const,
       properties: {
         scenario: {
           type: "string",
-          enum: ["expected", "optimistic", "severe", "crew"],
+          enum: ["base", "wet", "dry"],
           description: "The scenario to activate",
         },
       },
