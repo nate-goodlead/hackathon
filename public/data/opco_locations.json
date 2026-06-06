@@ -1,0 +1,46 @@
+[
+  {
+    "opco_id": "OPCO-HEEZE",
+    "opco_name": "Portfolio Company Heeze",
+    "city": "Heeze",
+    "region": "Noord-Brabant",
+    "lat": 51.382,
+    "lng": 5.571,
+    "source_system": "Exact",
+    "data_folder": "portfolio company data",
+    "notes": "GB 8000/8001/8002 transaction exports \u2014 location not in source files, mapped by data owner"
+  },
+  {
+    "opco_id": "OPCO-BRUNSSUM",
+    "opco_name": "Dakdekkersbedrijf Peter Ummels",
+    "city": "Brunssum",
+    "region": "Limburg",
+    "lat": 50.946,
+    "lng": 5.97,
+    "source_system": "Yuki",
+    "data_folder": "portfolio company 2 data",
+    "notes": "FinTransactions exports \u2014 Brunssum opco per data owner"
+  },
+  {
+    "opco_id": "OPCO-ANDIJK",
+    "opco_name": "Portfolio Company Andijk",
+    "city": "Andijk",
+    "region": "Noord-Holland",
+    "lat": 52.745,
+    "lng": 5.22,
+    "source_system": "Gilde",
+    "data_folder": "datasets/Altis dataset 1.xlsx",
+    "notes": "Monthly P&L workbook \u2014 Andijk label on 2026YTD sheet"
+  },
+  {
+    "opco_id": "OPCO-WINSCHOTEN",
+    "opco_name": "Portfolio Company Winschoten",
+    "city": "Winschoten",
+    "region": "Groningen",
+    "lat": 53.144,
+    "lng": 7.036,
+    "source_system": "Exact",
+    "data_folder": "datasets/Altis dataset 2.xlsx",
+    "notes": "Transaction journal sheets 2023\u20132026"
+  }
+]

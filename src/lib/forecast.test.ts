@@ -1,58 +1,33 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { seedData } from "../data/seedData";
-import { buildForecastModel, calculateWeatherRisk } from "./forecast";
 
-describe("forecast engine", () => {
-  it("lowers workability when rain and wind become unsafe", () => {
-    const calm = calculateWeatherRisk({
-      city: "Amsterdam",
-      week: 1,
-      rainMm: 2,
-      windGustKmh: 24,
-      maxTempC: 22,
-      minTempC: 11,
-      precipProbability: 20,
-      source: "seed",
-    });
+describe("forecast output", () => {
+  it("has 13 weeks per scenario with required driver fields", () => {
+    const path = resolve(__dirname, "../../public/data/forecast.json");
+    const data = JSON.parse(readFileSync(path, "utf-8"));
 
-    const storm = calculateWeatherRisk({
-      city: "Amsterdam",
-      week: 1,
-      rainMm: 58,
-      windGustKmh: 78,
-      maxTempC: 22,
-      minTempC: 11,
-      precipProbability: 92,
-      source: "seed",
-    });
-
-    expect(storm.workabilityScore).toBeLessThan(calm.workabilityScore);
-    expect(storm.lostDays).toBeGreaterThan(calm.lostDays);
+    for (const key of ["base", "wet", "dry"]) {
+      expect(data[key]).toHaveLength(13);
+      const week = data[key][0];
+      expect(week).toMatchObject({
+        week: 1,
+        label: "W1",
+        materials: expect.any(Number),
+        subcontractors: expect.any(Number),
+        milestoneBilling: expect.any(Number),
+        paymentLag: expect.any(Number),
+        weatherImpact: expect.any(Number),
+        net: expect.any(Number),
+      });
+    }
   });
 
-  it("models more cash risk under the wet scenario", () => {
-    const base = buildForecastModel(seedData, "base");
-    const wet = buildForecastModel(seedData, "wet");
-
-    expect(wet.summary.cashAtRisk).toBeGreaterThan(base.summary.cashAtRisk);
-    expect(wet.summary.idleCost).toBeGreaterThan(base.summary.idleCost);
-    expect(wet.summary.totalWeatherDelayDays).toBeGreaterThanOrEqual(base.summary.totalWeatherDelayDays);
-  });
-
-  it("reduces modeled exposure under the dry scenario", () => {
-    const base = buildForecastModel(seedData, "base");
-    const dry = buildForecastModel(seedData, "dry");
-
-    expect(dry.summary.cashAtRisk).toBeLessThan(base.summary.cashAtRisk);
-    expect(dry.summary.averageWorkability).toBeGreaterThanOrEqual(base.summary.averageWorkability);
-  });
-
-  it("tracks covenant headroom and weather delay days", () => {
-    const model = buildForecastModel(seedData, "base");
-
-    expect(model.summary.covenantFloor).toBeGreaterThan(0);
-    expect(model.summary.totalWeatherDelayDays).toBeGreaterThan(0);
-    expect(model.cashWeeks).toHaveLength(13);
-    expect(model.cashWeeks[0].materialsOut).toBeGreaterThanOrEqual(0);
+  it("wet quarter early weeks are worse than base", () => {
+    const path = resolve(__dirname, "../../public/data/forecast.json");
+    const data = JSON.parse(readFileSync(path, "utf-8"));
+    const wetEarly = data.wet.slice(0, 4).reduce((s: number, w: { net: number }) => s + w.net, 0);
+    const baseEarly = data.base.slice(0, 4).reduce((s: number, w: { net: number }) => s + w.net, 0);
+    expect(wetEarly).toBeLessThan(baseEarly);
   });
 });

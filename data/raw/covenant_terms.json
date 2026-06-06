@@ -1,0 +1,8 @@
+{
+  "headroom_threshold_eur": 500000,
+  "interest_coverage_minimum": 2.0,
+  "current_interest_coverage": 2.4,
+  "net_debt_eur": 4200000,
+  "ebitda_annual_eur": 1800000,
+  "formula": "headroom = headroom_threshold_eur - projected_net_debt_increase"
+}

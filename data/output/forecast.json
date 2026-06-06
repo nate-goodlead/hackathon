@@ -1,0 +1,398 @@
+{
+  "base": [
+    {
+      "week": 1,
+      "label": "W1",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 2,
+      "label": "W2",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 3,
+      "label": "W3",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 4,
+      "label": "W4",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 5,
+      "label": "W5",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 6,
+      "label": "W6",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 7,
+      "label": "W7",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 8,
+      "label": "W8",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 9,
+      "label": "W9",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 10,
+      "label": "W10",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 11,
+      "label": "W11",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 12,
+      "label": "W12",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 13,
+      "label": "W13",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    }
+  ],
+  "wet": [
+    {
+      "week": 1,
+      "label": "W1",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 2,
+      "label": "W2",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 3,
+      "label": "W3",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 4,
+      "label": "W4",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 5,
+      "label": "W5",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 6,
+      "label": "W6",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 7,
+      "label": "W7",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 8,
+      "label": "W8",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 9,
+      "label": "W9",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 10,
+      "label": "W10",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 11,
+      "label": "W11",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 12,
+      "label": "W12",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 13,
+      "label": "W13",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    }
+  ],
+  "dry": [
+    {
+      "week": 1,
+      "label": "W1",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 2,
+      "label": "W2",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 3,
+      "label": "W3",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 4,
+      "label": "W4",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 5,
+      "label": "W5",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 6,
+      "label": "W6",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 7,
+      "label": "W7",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 8,
+      "label": "W8",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 9,
+      "label": "W9",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 10,
+      "label": "W10",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 11,
+      "label": "W11",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 12,
+      "label": "W12",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    },
+    {
+      "week": 13,
+      "label": "W13",
+      "materials": 0,
+      "subcontractors": 0,
+      "milestoneBilling": 0,
+      "paymentLag": 0,
+      "weatherImpact": 0,
+      "net": 0
+    }
+  ]
+}

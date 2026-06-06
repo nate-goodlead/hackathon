@@ -1,151 +1,143 @@
 export type ScenarioId = "base" | "wet" | "dry";
 
-export type CashEventType = "inflow" | "outflow";
+export type RoleId = "cfo" | "opco" | "data";
 
-export type CashDriver = "materials" | "subcontractors" | "billing" | "other";
-
-export type RiskLevel = "Low" | "Medium" | "High" | "Critical";
-
-export type SourceSystem = "seed" | "exact" | "csv" | "gilde" | "yuki" | "snelstart";
-
-export interface Company {
-  id: string;
-  name: string;
-  region: string;
-  cashReserve: number;
-  laborCostPerDay: number;
-  crewCount: number;
-  covenantMinimumCash: number;
-  color: string;
+export interface WeekForecast {
+  week: number;
+  label: string;
+  materials: number;
+  subcontractors: number;
+  milestoneBilling: number;
+  paymentLag: number;
+  weatherImpact: number;
+  net: number;
 }
 
-export interface Project {
-  id: string;
-  companyId: string;
-  name: string;
+export interface ForecastData {
+  base: WeekForecast[];
+  wet: WeekForecast[];
+  dry: WeekForecast[];
+}
+
+export interface TraceRecord {
+  week: number;
+  driver: string;
+  amount: number;
+  scenario: string;
+  sourceSystem: string;
+  glAccount: string;
+  projectId: string;
+  projectName: string;
+  assumption: string;
+}
+
+export type ProjectStatus = "On Track" | "At Risk" | "Delayed" | "Not Started";
+
+export interface WipProject {
+  projectId: string;
+  project: string;
+  opco: string;
+  contractValue: number;
+  wipToDate: number;
+  pctComplete: number;
+  nextMilestone: string;
+  status: ProjectStatus;
+  weatherRisk: boolean;
+  riskReason: string;
+  materialsCommitted: number;
+  subcontractorWeek: number;
+  actionNeeded: string;
+}
+
+export interface CovenantSummary {
+  headroomThresholdEur: number;
+  interestCoverageRatio: number;
+  interestCoverageMinimum: number;
+  headroomByScenario: Record<ScenarioId, number>;
+  wetQuarterEarlyWeeksWorse: boolean;
+}
+
+export type DriverKey =
+  | "materials"
+  | "subcontractors"
+  | "milestoneBilling"
+  | "paymentLag"
+  | "weatherImpact";
+
+export interface TraceSelection {
+  week: number;
+  driver: DriverKey;
+  scenario: ScenarioId;
+}
+
+export const DRIVER_LABELS: Record<DriverKey, string> = {
+  materials: "Materials Outflows",
+  subcontractors: "Subcontractor Payments",
+  milestoneBilling: "Milestone Billing",
+  paymentLag: "Customer Payment Lag",
+  weatherImpact: "Weather Impact",
+};
+
+export const DRIVER_COLORS: Record<DriverKey, string> = {
+  materials: "#3b82f6",
+  subcontractors: "#a855f7",
+  milestoneBilling: "#10b981",
+  paymentLag: "#f59e0b",
+  weatherImpact: "#64748b",
+};
+
+export const SCENARIO_LABELS: Record<ScenarioId, string> = {
+  base: "Base",
+  wet: "Wet Quarter",
+  dry: "Dry Quarter",
+};
+
+export interface WeatherWeek {
+  week: number;
+  label: string;
+  weekStart: string;
+  rainfallMm: number;
+  tempMinC: number;
+  tempMaxC: number;
+  rainDays: number;
+  frostDays: number;
+  stoppageDays: number;
+  delayDays: number;
+  source: string;
+}
+
+export interface WeatherTransactionMatch {
+  date: string;
   city: string;
+  opco: string;
+  amount: number;
+  glAccount: string;
+  description: string;
+  rainfallMm: number;
+  tempMinC: number;
+  stoppageReasons: string[];
+  insight: string;
+}
+
+export interface WeatherCityInsights {
+  city: string;
+  opco: string;
   lat: number;
   lng: number;
-  phase: string;
-  contractValue: number;
-  startWeek: number;
-  durationWeeks: number;
-  startDate: string;
-  endDate: string;
-  crewDaysRemaining: number;
-  marginPct: number;
-  priority: "Standard" | "High" | "Strategic";
+  weekly: WeatherWeek[];
+  highlights: string[];
+  worstWeek: string | null;
+  totalStoppageDays: number;
+  transactionMatches: WeatherTransactionMatch[];
 }
 
-export interface CashEvent {
-  id: string;
-  projectId: string;
-  week: number;
-  type: CashEventType;
-  driver: CashDriver;
-  label: string;
-  amount: number;
-  sourceSystem: SourceSystem;
-  sourceFile: string;
-  sourceRow: number;
-  accountCode: string;
-  accountName: string;
-  traceId: string;
-}
-
-export interface WeatherForecast {
-  city: string;
-  week: number;
-  rainMm: number;
-  windGustKmh: number;
-  maxTempC: number;
-  minTempC: number;
-  precipProbability: number;
-  source: "seed" | "csv" | "open-meteo";
-}
-
-export interface DataBundle {
-  companies: Company[];
-  projects: Project[];
-  cashEvents: CashEvent[];
-  weatherForecast: WeatherForecast[];
-}
-
-export interface WeatherLoadState {
-  status: "idle" | "loading" | "live" | "fallback";
-  lastUpdated: string | null;
-  citiesLoaded: number;
-  message: string;
-}
-
-export interface WeatherRiskScore {
-  week: number;
-  workabilityScore: number;
-  lostDays: number;
-  weather: WeatherForecast;
-  reasons: string[];
-}
-
-export interface ProjectRiskOutput {
-  project: Project;
-  company: Company;
-  weeklyScores: WeatherRiskScore[];
-  worstWeek: WeatherRiskScore;
-  delayDays: number;
-  delayWeeks: number;
-  cashAtRisk: number;
-  delayedInflow: number;
-  idleCost: number;
-  totalExposure: number;
-  riskLevel: RiskLevel;
-  recommendation: string;
-  privacySafeContext: string;
-}
-
-export interface CashWeek {
-  week: number;
-  label: string;
-  baseline: number;
-  adjusted: number;
-  baselineCash: number;
-  adjustedCash: number;
-  delayedInflow: number;
-  idleCost: number;
-  delta: number;
-  materialsOut: number;
-  subcontractorsOut: number;
-  billingIn: number;
-  covenantFloor: number;
-  headroom: number;
-}
-
-export interface ForecastSummary {
-  startingCash: number;
-  cashAtRisk: number;
-  delayedInflow: number;
-  idleCost: number;
-  bufferNeeded: number;
-  averageWorkability: number;
-  criticalProjects: number;
-  worstWeek: number;
-  lowestAdjustedCash: number;
-  covenantFloor: number;
-  minHeadroom: number;
-  breachWeek: number | null;
-  totalWeatherDelayDays: number;
-  projectedEndCash: number;
-}
-
-export interface ForecastModel {
-  scenario: ScenarioId;
-  risks: ProjectRiskOutput[];
-  cashWeeks: CashWeek[];
-  summary: ForecastSummary;
-}
-
-export interface TraceContext {
-  scenario: ScenarioId;
-  scenarioLabel: string;
-  weatherSource: string;
-  paymentLagDays: number;
+export interface WeatherInsights {
+  fetchedAt: string;
+  source: string;
+  timezone: string;
+  horizonWeeks: number;
+  weekStart: string;
+  summary: string;
+  topHighlights: string[];
+  cities: WeatherCityInsights[];
 }

@@ -1,0 +1,12 @@
+{
+  "headroomThresholdEur": 500000,
+  "interestCoverageRatio": 2.4,
+  "interestCoverageMinimum": 2.0,
+  "headroomByScenario": {
+    "base": 500000,
+    "wet": 425000,
+    "dry": 540000
+  },
+  "wetQuarterEarlyWeeksWorse": false,
+  "dryQuarterEarlyWeeksBetter": false
+}
